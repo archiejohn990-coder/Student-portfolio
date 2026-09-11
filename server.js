@@ -14,9 +14,17 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.static(path.join(__dirname, "public")));
 
 // ==================== MONGODB ====================
-mongoose.connect(process.env.MONGO_URL)
-.then(() => console.log("✅ DB Connected"))
-.catch(err => console.error("❌ MongoDB error:", err));
+const MONGO_URL = process.env.MONGODB_URI || process.env.MONGO_URL;
+if (!MONGO_URL) {
+    console.error("❌ MONGODB_URI is not set in .env");
+    process.exit(1);
+}
+mongoose.connect(MONGO_URL)
+.then(() => console.log("✅ DB Connected:", mongoose.connection.name))
+.catch(err => {
+    console.error("❌ MongoDB error:", err.message);
+    process.exit(1);
+});
 
 // ==================== SCHEMAS ====================
 const studentSchema = new mongoose.Schema({
@@ -100,7 +108,7 @@ app.post("/api/signup", async (req, res) => {
         const student = await Student.create({ fullName, email, passwordHash, onlineStatus: "online", lastSeen: new Date() });
         await Portfolio.create({ studentId: student._id, fullName });
         const token = jwt.sign({ studentId: student._id }, process.env.JWT_SECRET, { expiresIn: "7d" });
-        res.json({ success: true, token, student: { id: student._id, fullName, email } });
+        res.json({ success: true, token, student: { id: student._id, fullName, email, language: "en" } });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -274,7 +282,6 @@ app.get("/api/chat/:friendId", authenticateToken, async (req, res) => {
                 { from: req.params.friendId, to: req.studentId }
             ]
         }).sort({ createdAt: 1 }).limit(200);
-        // mark as read
         await Message.updateMany(
             { from: req.params.friendId, to: req.studentId, read: false },
             { read: true }
