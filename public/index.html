@@ -150,14 +150,13 @@
         <section id="view-friend-detail" class="hidden">
           <button class="btn-ghost" onclick="showView('friends')"><i class="fas fa-arrow-left"></i> <span data-i18n="back">Back</span></button>
           <div class="card" style="margin-top:12px;">
-            <div style="display:flex; gap:20px; align-items:center;">
+            <div style="display:flex; gap:20px; align-items:center; flex-wrap:wrap;">
               <img id="fdPhoto" style="width:90px; height:90px; border-radius:50%; object-fit:cover; border:3px solid var(--primary);" src="">
-              <div>
+              <div style="flex:1;">
                 <h2 id="fdName">Friend</h2>
                 <p class="muted" id="fdStatus"></p>
                 <p class="muted" id="fdCourse"></p>
               </div>
-              <div style="flex:1;"></div>
               <button class="btn-inline" onclick="openChat()"><i class="fas fa-comments"></i> <span data-i18n="chat">Chat</span></button>
             </div>
             <div id="fdBio" style="margin-top:14px;"></div>
@@ -172,7 +171,7 @@
         <!-- CHAT -->
         <section id="view-chat" class="hidden">
           <button class="btn-ghost" onclick="showView('friend-detail')"><i class="fas fa-arrow-left"></i> <span data-i18n="back">Back</span></button>
-          <div class="card" style="margin-top:12px; display:flex; flex-direction:column; height: calc(100vh - 200px);">
+          <div class="card" style="margin-top:12px; display:flex; flex-direction:column; height: calc(100vh - 220px);">
             <div style="display:flex; align-items:center; gap:12px; padding-bottom:12px; border-bottom:1px solid var(--border);">
               <img id="chatAvatar" style="width:44px; height:44px; border-radius:50%; object-fit:cover;" src="">
               <div>
