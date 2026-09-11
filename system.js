@@ -1,9 +1,8 @@
 /* ============================================================
    STUDENT PORTFOLIO — Frontend Only (No Database)
-   Data is stored in localStorage per user account
+   Data stored in localStorage per user account
    ============================================================ */
 
-// ==================== STATE ====================
 let currentStudent = null;
 let authMode = "login";
 let editingAchievementId = null;
@@ -36,8 +35,8 @@ function toast(type, title, msg) {
 
 // ==================== STORAGE ====================
 const STORAGE_KEYS = {
-    USERS: "portfolio_users",          // all accounts
-    SESSION: "portfolio_session",      // current logged-in email
+    USERS: "portfolio_users",
+    SESSION: "portfolio_session",
     THEME: "portfolio_theme"
 };
 
@@ -61,16 +60,13 @@ function saveUserData(email, data) {
     saveUsers(users);
 }
 
-function getSession() {
-    return localStorage.getItem(STORAGE_KEYS.SESSION);
-}
-
+function getSession() { return localStorage.getItem(STORAGE_KEYS.SESSION); }
 function setSession(email) {
     if (email) localStorage.setItem(STORAGE_KEYS.SESSION, email);
     else localStorage.removeItem(STORAGE_KEYS.SESSION);
 }
 
-// Simple hash for password (NOT secure, just for demo)
+// Simple hash (demo only, not secure)
 function hashPassword(pw) {
     let hash = 0;
     for (let i = 0; i < pw.length; i++) {
@@ -112,20 +108,12 @@ function signup(fullName, email, password) {
     if (users[email]) return { error: "Email already registered" };
 
     users[email] = {
-        fullName,
-        email,
+        fullName, email,
         passwordHash: hashPassword(password),
         portfolio: {
-            fullName,
-            course: "",
-            school: "",
-            yearLevel: "",
-            bio: "",
-            motto: "",
-            hobbies: [],
-            skills: [],
-            photo: null,
-            updatedAt: new Date().toISOString()
+            fullName, course: "", school: "", yearLevel: "",
+            bio: "", motto: "", hobbies: [], skills: [],
+            photo: null, updatedAt: new Date().toISOString()
         },
         achievements: [],
         createdAt: new Date().toISOString()
@@ -287,12 +275,7 @@ function saveAchievement() {
 
     if (editingAchievementId) {
         const idx = currentStudent.achievements.findIndex(a => a.id === editingAchievementId);
-        if (idx !== -1) {
-            currentStudent.achievements[idx] = {
-                ...currentStudent.achievements[idx],
-                ...payload
-            };
-        }
+        if (idx !== -1) currentStudent.achievements[idx] = { ...currentStudent.achievements[idx], ...payload };
     } else {
         currentStudent.achievements.push({
             id: "ach_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
@@ -343,9 +326,8 @@ function loadSummary() {
     ).join("");
 }
 
-// ==================== FORM HANDLER ====================
+// ==================== INIT ====================
 document.addEventListener("DOMContentLoaded", () => {
-    // Auto-login if session exists
     const sessionEmail = getSession();
     if (sessionEmail) {
         const user = getUserData(sessionEmail);
@@ -356,7 +338,6 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     }
 
-    // Auth form
     $("authForm").addEventListener("submit", (e) => {
         e.preventDefault();
         const email = $("email").value.trim().toLowerCase();
