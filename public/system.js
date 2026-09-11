@@ -1,5 +1,5 @@
 /* ============================================================
-   STUDENT PORTFOLIO — Full feature set
+   STUDENT PORTFOLIO — Complete System
    ============================================================ */
 
 const API_URL = '';
@@ -10,104 +10,9 @@ let editingAchievementId = null;
 let heartbeatInterval = null;
 let activeFriendId = null;
 let chatPollInterval = null;
-let language = localStorage.getItem('sp_lang') || 'en';
-
-// ==================== TRANSLATIONS ====================
-const TRANSLATIONS = {
-    en: {
-        fullName: "Full Name", email: "Email", password: "Password",
-        login: "Login", signup: "Sign Up", logout: "Logout",
-        aboutMe: "About Me", achievements: "Achievements", friends: "Friends",
-        settings: "Settings", save: "Save", cancel: "Cancel", back: "Back",
-        addFriend: "Add a Friend", send: "Send", pendingRequests: "Pending Requests",
-        myFriends: "My Friends", chat: "Chat", publicAchievements: "Public Achievements",
-        personalInfo: "Personal Info", course: "Course", school: "School",
-        yearLevel: "Year Level", motto: "Motto", bio: "Bio",
-        hobbies: "Hobbies", skills: "Skills", filterCategory: "Filter",
-        addAchievement: "Add Achievement", title: "Title", category: "Category",
-        date: "Date", visibility: "Visibility", description: "Description",
-        public: "Public (friends see)", private: "Private",
-        changePassword: "Change Password", currentPassword: "Current Password",
-        newPassword: "New Password", changePhoto: "Change Photo",
-        language: "Language", account: "Account", dangerZone: "Danger Zone",
-        deleteAccount: "Delete Account", online: "Online", offline: "Offline",
-        visibility_: "Visibility"
-    },
-    fil: {
-        fullName: "Buong Pangalan", email: "Email", password: "Password",
-        login: "Mag-login", signup: "Mag-sign Up", logout: "Mag-logout",
-        aboutMe: "Tungkol sa Akin", achievements: "Mga Tagumpay", friends: "Mga Kaibigan",
-        settings: "Mga Setting", save: "I-save", cancel: "Kanselahin", back: "Bumalik",
-        addFriend: "Magdagdag ng Kaibigan", send: "Ipadala", pendingRequests: "Mga Kahilingan",
-        myFriends: "Aking mga Kaibigan", chat: "Makipag-usap", publicAchievements: "Pampublikong Tagumpay",
-        personalInfo: "Personal na Impormasyon", course: "Kurso", school: "Paaralan",
-        yearLevel: "Antas ng Taon", motto: "Motto", bio: "Tungkol sa Sarili",
-        hobbies: "Mga Libangan", skills: "Mga Kasanayan", filterCategory: "Salain",
-        addAchievement: "Magdagdag ng Tagumpay", title: "Pamagat", category: "Kategorya",
-        date: "Petsa", visibility: "Pagkakita", description: "Paglalarawan",
-        public: "Pampubliko (nakikita ng kaibigan)", private: "Pribado",
-        changePassword: "Palitan ang Password", currentPassword: "Kasalukuyang Password",
-        newPassword: "Bagong Password", changePhoto: "Palitan ang Larawan",
-        language: "Wika", account: "Account", dangerZone: "Mapanganib",
-        deleteAccount: "Burahin ang Account", online: "Online", offline: "Offline",
-        visibility_: "Pagkakita"
-    },
-    es: {
-        fullName: "Nombre Completo", email: "Correo", password: "Contraseña",
-        login: "Iniciar Sesión", signup: "Registrarse", logout: "Cerrar Sesión",
-        aboutMe: "Sobre Mí", achievements: "Logros", friends: "Amigos",
-        settings: "Ajustes", save: "Guardar", cancel: "Cancelar", back: "Atrás",
-        addFriend: "Añadir Amigo", send: "Enviar", pendingRequests: "Solicitudes Pendientes",
-        myFriends: "Mis Amigos", chat: "Chatear", publicAchievements: "Logros Públicos",
-        personalInfo: "Información Personal", course: "Curso", school: "Escuela",
-        yearLevel: "Año", motto: "Lema", bio: "Biografía",
-        hobbies: "Pasatiempos", skills: "Habilidades", filterCategory: "Filtrar",
-        addAchievement: "Añadir Logro", title: "Título", category: "Categoría",
-        date: "Fecha", visibility: "Visibilidad", description: "Descripción",
-        public: "Público (visible a amigos)", private: "Privado",
-        changePassword: "Cambiar Contraseña", currentPassword: "Contraseña Actual",
-        newPassword: "Nueva Contraseña", changePhoto: "Cambiar Foto",
-        language: "Idioma", account: "Cuenta", dangerZone: "Zona de Peligro",
-        deleteAccount: "Eliminar Cuenta", online: "En línea", offline: "Desconectado",
-        visibility_: "Visibilidad"
-    }
-};
-
-function t(key) {
-    return TRANSLATIONS[language]?.[key] || TRANSLATIONS.en[key] || key;
-}
-
-function applyLanguage() {
-    document.querySelectorAll('[data-i18n]').forEach(el => {
-        const key = el.getAttribute('data-i18n');
-        const translated = TRANSLATIONS[language]?.[key] || TRANSLATIONS.en[key];
-        if (!translated) return;
-        if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
-            el.placeholder = translated;
-        } else if (el.tagName === 'OPTION') {
-            el.textContent = translated;
-        } else {
-            // preserve icon children
-            const hasIcon = el.querySelector('i');
-            if (hasIcon) {
-                el.innerHTML = el.querySelector('i').outerHTML + " " + translated;
-            } else {
-                el.innerText = translated;
-            }
-        }
-    });
-}
-
-function changeLanguage(lang) {
-    language = lang;
-    localStorage.setItem('sp_lang', lang);
-    applyLanguage();
-    if (authToken) {
-        apiCall('/api/user/language', {
-            method: 'PUT', body: JSON.stringify({ language: lang })
-        }).catch(() => {});
-    }
-}
+let postsTab = 'feed';
+let captchaCode = "";
+let postImageB64 = null;
 
 // ==================== HELPERS ====================
 function $(id) { return document.getElementById(id); }
@@ -132,7 +37,7 @@ function toast(type, title, msg) {
         <div><div class="t-title">${escapeHtml(title)}</div><div class="t-msg">${escapeHtml(msg)}</div></div>
         <button class="x" onclick="this.parentElement.remove()">✕</button>`;
     wrap.appendChild(el);
-    setTimeout(() => el.remove(), 4000);
+    setTimeout(() => el.remove(), 4500);
 }
 
 // ==================== API ====================
@@ -164,13 +69,34 @@ function toggleTheme() {
     applyTheme(s || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"));
 })();
 
+// ==================== CAPTCHA ====================
+function generateCaptcha() {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let result = '';
+    for (let i = 0; i < 4; i++) result += chars.charAt(Math.floor(Math.random() * chars.length));
+    captchaCode = result;
+    if ($("captchaBox")) $("captchaBox").innerText = captchaCode;
+    if ($("captchaInp")) $("captchaInp").value = "";
+}
+function verifyCaptcha() {
+    const inp = $("captchaInp");
+    if (!inp) return true;
+    if (inp.value.trim().toUpperCase() !== captchaCode) {
+        toast("danger", "Wrong Captcha", "Please enter the correct code");
+        generateCaptcha();
+        return false;
+    }
+    return true;
+}
+
 // ==================== AUTH ====================
 function toggleMode(mode) {
     authMode = mode;
     $("tabLogin").classList.toggle("active", mode === "login");
     $("tabSignup").classList.toggle("active", mode === "signup");
     $("fieldName").classList.toggle("hidden", mode === "login");
-    $("submitBtn").innerText = mode === "login" ? t("login") : t("signup");
+    $("submitBtn").innerText = mode === "login" ? "Login" : "Create Account";
+    generateCaptcha();
 }
 
 async function signup(fullName, email, password) {
@@ -191,10 +117,6 @@ async function login(email, password) {
     localStorage.setItem('sp_token', authToken);
     currentUser = data.student;
     localStorage.setItem('sp_user', JSON.stringify(currentUser));
-    if (data.student.language) {
-        language = data.student.language;
-        localStorage.setItem('sp_lang', language);
-    }
 }
 
 function logout() {
@@ -206,11 +128,65 @@ function logout() {
     location.reload();
 }
 
-// ==================== INIT ====================
+// ==================== FORGOT PASSWORD ====================
+function showForgot() {
+    $("loginFormContainer").style.display = "none";
+    $("forgotContainer").style.display = "block";
+    $("forgotStep1").style.display = "block";
+    $("forgotStep2").style.display = "none";
+}
+function hideForgot() {
+    $("loginFormContainer").style.display = "block";
+    $("forgotContainer").style.display = "none";
+    $("forgotEmail").value = "";
+    $("otpCode").value = "";
+    $("newPassForgot").value = "";
+}
+function showForgotStep1() {
+    $("forgotStep1").style.display = "block";
+    $("forgotStep2").style.display = "none";
+}
+
+async function sendForgotOtp() {
+    const email = $("forgotEmail").value.trim().toLowerCase();
+    if (!email) return toast("warn", "Email Required", "Enter your email");
+    try {
+        const data = await apiCall('/api/forgot/send', {
+            method: 'POST', body: JSON.stringify({ email })
+        });
+        if (data.success) {
+            toast("info", "Demo Mode", `Your OTP is: ${data.demoOtp}`);
+            $("forgotStep1").style.display = "none";
+            $("forgotStep2").style.display = "block";
+        }
+    } catch (e) { toast("danger", "Error", e.message); }
+}
+
+async function resetForgotPassword() {
+    const email = $("forgotEmail").value.trim().toLowerCase();
+    const otp = $("otpCode").value.trim();
+    const newPassword = $("newPassForgot").value;
+    if (!otp || otp.length !== 6) return toast("warn", "Invalid OTP", "Enter the 6-digit code");
+    if (!newPassword || newPassword.length < 6) return toast("warn", "Weak", "Min 6 characters");
+    try {
+        const data = await apiCall('/api/forgot/reset', {
+            method: 'POST', body: JSON.stringify({ email, otp, newPassword })
+        });
+        if (data.success) {
+            toast("success", "Password Reset", "Log in with your new password.");
+            hideForgot();
+        }
+    } catch (e) { toast("danger", "Error", e.message); }
+}
+
+// ==================== CREATOR MODAL ====================
+function openCreator() { $("creatorBackdrop").style.display = "flex"; }
+function closeCreator() { $("creatorBackdrop").style.display = "none"; }
+
+// ==================== INIT APP ====================
 async function initApp() {
     $("authSection").style.display = "none";
     $("app").style.display = "block";
-    applyLanguage();
     hydrateTopBar();
     showView("profile");
     startHeartbeat();
@@ -225,14 +201,13 @@ function hydrateTopBar() {
     const av = currentUser.photo || `https://ui-avatars.com/api/?background=6366f1&color=fff&name=${encodeURIComponent(currentUser.fullName)}`;
     $("topAvatar").src = av;
     $("userAvatar").src = av;
-    $("profName").innerText = currentUser.fullName;
     $("profEmail").innerText = currentUser.email;
-    $("langSelect").value = language;
+    $("setName").value = currentUser.fullName;
 }
 
 // ==================== NAVIGATION ====================
 function showView(v) {
-    ["profile", "achievements", "friends", "settings", "friend-detail", "chat"].forEach(id => {
+    ["profile", "posts", "achievements", "friends", "settings", "friend-detail", "chat"].forEach(id => {
         const el = $("view-" + id);
         if (el) el.classList.add("hidden");
     });
@@ -244,10 +219,12 @@ function showView(v) {
 
     if (window.innerWidth <= 820) closeDrawer();
 
-    if (v === "profile") loadProfile();
+    if (v === "profile") { loadProfile(); loadSettingsProfile(); }
+    if (v === "posts") loadPosts();
     if (v === "achievements") loadAchievements();
     if (v === "friends") { loadFriends(); loadRequests(); }
-    if (v === "settings") updateStatusUI();
+    if (v === "settings") { updateStatusUI(); loadSettingsProfile(); }
+
     if (v !== "chat" && chatPollInterval) {
         clearInterval(chatPollInterval);
         chatPollInterval = null;
@@ -272,6 +249,8 @@ async function loadProfile() {
         $("pCourse").value = p.course || "";
         $("pSchool").value = p.school || "";
         $("pYear").value = p.yearLevel || "";
+        $("pPronouns").value = p.pronouns || "";
+        $("pGender").value = p.gender || "";
         $("pMotto").value = p.motto || "";
         $("pBio").value = p.bio || "";
         $("pHobbies").value = (p.hobbies || []).join(", ");
@@ -288,6 +267,8 @@ async function saveProfile() {
                 course: $("pCourse").value.trim(),
                 school: $("pSchool").value.trim(),
                 yearLevel: $("pYear").value.trim(),
+                pronouns: $("pPronouns").value.trim(),
+                gender: $("pGender").value,
                 motto: $("pMotto").value.trim(),
                 bio: $("pBio").value.trim(),
                 hobbies: $("pHobbies").value.split(",").map(s => s.trim()).filter(Boolean),
@@ -298,6 +279,53 @@ async function saveProfile() {
     } catch (e) { toast("danger", "Error", e.message); }
 }
 
+async function loadSettingsProfile() {
+    try {
+        const data = await apiCall('/api/portfolio');
+        const p = data.portfolio || {};
+        $("setPronouns").value = p.pronouns || "";
+        $("setGender").value = p.gender || "";
+        $("setBio").value = p.bio || "";
+    } catch (e) {}
+}
+
+async function saveSettingsProfile() {
+    try {
+        const data = await apiCall('/api/portfolio');
+        const p = data.portfolio || {};
+        await apiCall('/api/portfolio', {
+            method: 'PUT',
+            body: JSON.stringify({
+                fullName: p.fullName || currentUser.fullName,
+                course: p.course || "",
+                school: p.school || "",
+                yearLevel: p.yearLevel || "",
+                motto: p.motto || "",
+                hobbies: p.hobbies || [],
+                skills: p.skills || [],
+                pronouns: $("setPronouns").value.trim(),
+                gender: $("setGender").value,
+                bio: $("setBio").value.trim()
+            })
+        });
+        toast("success", "Saved", "Profile updated.");
+    } catch (e) { toast("danger", "Error", e.message); }
+}
+
+async function changeName() {
+    const name = $("setName").value.trim();
+    if (!name || name.length < 2) return toast("warn", "Invalid", "Name too short.");
+    try {
+        await apiCall('/api/user/name', {
+            method: 'PUT', body: JSON.stringify({ fullName: name })
+        });
+        currentUser.fullName = name;
+        localStorage.setItem('sp_user', JSON.stringify(currentUser));
+        hydrateTopBar();
+        toast("success", "Updated", "Display name changed.");
+    } catch (e) { toast("danger", "Error", e.message); }
+}
+
 // ==================== ACHIEVEMENTS ====================
 async function loadAchievements() {
     try {
@@ -305,7 +333,6 @@ async function loadAchievements() {
         const filter = $("achFilter").value;
         let list = data.achievements || [];
         if (filter) list = list.filter(a => a.category === filter);
-
         const c = $("achievementsList");
         if (list.length === 0) { c.innerHTML = '<p class="empty">No achievements yet.</p>'; return; }
         c.innerHTML = list.map(a => `
@@ -317,8 +344,8 @@ async function loadAchievements() {
                         ${a.description ? `<p>${escapeHtml(a.description)}</p>` : ""}
                         <div class="chips">
                             ${a.visibility === "private"
-                                ? `<span class="chip private"><i class="fas fa-lock"></i> ${t("private")}</span>`
-                                : `<span class="chip"><i class="fas fa-eye"></i> ${t("public")}</span>`}
+                                ? '<span class="chip private"><i class="fas fa-lock"></i> Private</span>'
+                                : '<span class="chip"><i class="fas fa-eye"></i> Public</span>'}
                         </div>
                     </div>
                     <div class="entry-actions">
@@ -333,7 +360,7 @@ async function loadAchievements() {
 
 function openAchievementModal(ach = null) {
     editingAchievementId = ach?._id || null;
-    $("achModalTitle").innerText = editingAchievementId ? "Edit" : "New Achievement";
+    $("achModalTitle").innerText = editingAchievementId ? "Edit Achievement" : "New Achievement";
     $("achTitle").value = ach?.title || "";
     $("achCategory").value = ach?.category || "Academic";
     $("achDate").value = ach?.date || new Date().toISOString().slice(0,10);
@@ -379,6 +406,121 @@ async function deleteAchievement(id) {
     await apiCall(`/api/achievements/${id}`, { method: 'DELETE' });
     toast("", "Deleted", "");
     loadAchievements();
+}
+
+// ==================== POSTS ====================
+function previewPostImage(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 3_000_000) {
+        e.target.value = "";
+        return toast("warn", "Too large", "Max 3MB.");
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+        postImageB64 = reader.result;
+        const prev = $("postPreview");
+        prev.src = postImageB64;
+        prev.classList.remove("hidden");
+    };
+    reader.readAsDataURL(file);
+}
+
+async function createPost() {
+    if (!postImageB64) return toast("warn", "No image", "Choose an image first.");
+    try {
+        await apiCall('/api/posts', {
+            method: 'POST',
+            body: JSON.stringify({
+                image: postImageB64,
+                caption: $("postCaption").value.trim(),
+                visibility: $("postVisibility").value
+            })
+        });
+        toast("success", "Posted", "Your photo is live.");
+        postImageB64 = null;
+        $("postImageInput").value = "";
+        $("postPreview").classList.add("hidden");
+        $("postCaption").value = "";
+        loadPosts();
+    } catch (e) { toast("danger", "Error", e.message); }
+}
+
+function switchPostsTab(tab) {
+    postsTab = tab;
+    $("tabFeed").classList.toggle("active", tab === "feed");
+    $("tabMine").classList.toggle("active", tab === "mine");
+    loadPosts();
+}
+
+async function loadPosts() {
+    try {
+        const endpoint = postsTab === "feed" ? '/api/posts/feed' : '/api/posts/mine';
+        const data = await apiCall(endpoint);
+        const c = $("postsContainer");
+        const posts = data.posts || [];
+        if (posts.length === 0) {
+            c.innerHTML = '<p class="empty">No photos yet.</p>';
+            return;
+        }
+        c.innerHTML = posts.map(p => {
+            const av = p.author.photo || `https://ui-avatars.com/api/?background=6366f1&color=fff&name=${p.author.name?.[0] || 'U'}`;
+            return `
+                <div class="post-card">
+                    <div class="post-head">
+                        <img src="${av}">
+                        <div style="flex:1;">
+                            <div class="name">${escapeHtml(p.author.name)}</div>
+                            <div class="time">${timeAgo(p.createdAt)}</div>
+                        </div>
+                        ${p.author.id === currentUser.id
+                            ? `<button class="iconbtn danger" onclick="deletePost('${p.id}')" title="Delete"><i class="fas fa-trash"></i></button>`
+                            : ""}
+                    </div>
+                    <img class="post-image" src="${p.image}" onclick="openPostViewer('${p.id}')" style="cursor:pointer;">
+                    <div class="post-body">
+                        ${p.caption ? `<div class="post-caption">${escapeHtml(p.caption)}</div>` : ""}
+                        <div class="post-actions">
+                            <button class="like-btn ${p.likedByMe ? 'liked' : ''}" onclick="toggleLike('${p.id}')">
+                                <i class="fas fa-heart"></i> ${p.likes}
+                            </button>
+                            ${p.visibility === "private" ? `<span class="chip private"><i class="fas fa-lock"></i> Private</span>` : ""}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join("");
+    } catch (e) { toast("danger", "Error", "Load failed"); }
+}
+
+async function toggleLike(id) {
+    try {
+        await apiCall(`/api/posts/${id}/like`, { method: 'POST' });
+        loadPosts();
+    } catch (e) { toast("danger", "Error", e.message); }
+}
+
+async function deletePost(id) {
+    if (!confirm("Delete this photo?")) return;
+    try {
+        await apiCall(`/api/posts/${id}`, { method: 'DELETE' });
+        toast("", "Deleted", "");
+        loadPosts();
+    } catch (e) { toast("danger", "Error", e.message); }
+}
+
+async function openPostViewer(id) {
+    const endpoint = postsTab === "feed" ? '/api/posts/feed' : '/api/posts/mine';
+    const data = await apiCall(endpoint);
+    const p = (data.posts || []).find(x => x.id === id);
+    if (!p) return;
+    $("postViewerImg").src = p.image;
+    $("postViewerCaption").innerText = p.caption || "";
+    $("postViewerMeta").innerText = `By ${p.author.name} • ${timeAgo(p.createdAt)} • ${p.likes} likes`;
+    $("postViewerBackdrop").style.display = "flex";
+}
+function closePostViewer() {
+    $("postViewerBackdrop").style.display = "none";
 }
 
 // ==================== FRIENDS ====================
@@ -448,7 +590,7 @@ async function loadFriends() {
                             <div class="friend-email">${escapeHtml(f.email)}</div>
                             <div class="friend-status">
                                 <span class="status-dot ${f.onlineStatus}"></span>
-                                <span>${f.onlineStatus === "online" ? t("online") : `Last seen ${timeAgo(f.lastSeen)}`}</span>
+                                <span>${f.onlineStatus === "online" ? "Online" : `Last seen ${timeAgo(f.lastSeen)}`}</span>
                             </div>
                         </div>
                     </div>
@@ -479,10 +621,28 @@ async function viewFriendProfile(id) {
 
         $("fdPhoto").src = av;
         $("fdName").innerText = f.name;
-        $("fdStatus").innerHTML = `<span class="status-dot ${f.onlineStatus}"></span> ${f.onlineStatus === "online" ? t("online") : `Last seen ${timeAgo(f.lastSeen)}`}`;
+        $("fdPronouns").innerText = p.pronouns ? `(${p.pronouns})` : "";
+        $("fdStatus").innerHTML = `<span class="status-dot ${f.onlineStatus}"></span> ${f.onlineStatus === "online" ? "Online" : `Last seen ${timeAgo(f.lastSeen)}`}`;
         $("fdCourse").innerText = [p.course, p.school, p.yearLevel].filter(Boolean).join(" • ");
         $("fdBio").innerText = p.bio || "";
         $("fdMotto").innerText = p.motto ? `"${p.motto}"` : "";
+
+        const meta = [];
+        if (p.gender) meta.push(`<span class="chip"><i class="fas fa-user"></i> ${escapeHtml(p.gender)}</span>`);
+        if (p.pronouns) meta.push(`<span class="chip"><i class="fas fa-comment"></i> ${escapeHtml(p.pronouns)}</span>`);
+        (p.hobbies || []).forEach(h => meta.push(`<span class="chip"><i class="fas fa-heart"></i> ${escapeHtml(h)}</span>`));
+        (p.skills || []).forEach(s => meta.push(`<span class="chip"><i class="fas fa-star"></i> ${escapeHtml(s)}</span>`));
+        $("fdMeta").innerHTML = meta.join("");
+
+        const posts = data.posts || [];
+        $("fdPosts").innerHTML = posts.length === 0
+            ? '<p class="muted">No photos yet.</p>'
+            : posts.map(x => `
+                <div class="photo-tile" onclick="openFriendPhoto('${x.image}','${escapeHtml(x.caption || "")}')">
+                    <img src="${x.image}">
+                    ${x.caption ? `<div class="overlay">${escapeHtml(x.caption)}</div>` : ""}
+                </div>
+            `).join("");
 
         const ach = data.achievements || [];
         $("fdAchievements").innerHTML = ach.length === 0
@@ -499,15 +659,22 @@ async function viewFriendProfile(id) {
     } catch (e) { toast("danger", "Error", e.message); }
 }
 
+function openFriendPhoto(img, caption) {
+    $("postViewerImg").src = img;
+    $("postViewerCaption").innerText = caption;
+    $("postViewerMeta").innerText = "";
+    $("postViewerBackdrop").style.display = "flex";
+}
+
 // ==================== CHAT ====================
 function openChat() {
     if (!activeFriendId) return;
     showView("chat");
     $("chatName").innerText = $("fdName").innerText;
     $("chatAvatar").src = $("fdPhoto").src;
-    $("chatStatusDot").className = "status-dot " + ($("fdStatus").querySelector(".status-dot")?.className.includes("online") ? "online" : "offline");
+    const isOnline = $("fdStatus").querySelector(".status-dot")?.className.includes("online");
+    $("chatStatusDot").className = "status-dot " + (isOnline ? "online" : "offline");
     $("chatStatusText").innerText = $("fdStatus").innerText.replace(/^[^\s]+\s/, '');
-
     loadChat();
     if (chatPollInterval) clearInterval(chatPollInterval);
     chatPollInterval = setInterval(loadChat, 3000);
@@ -568,7 +735,7 @@ function updateStatusUI() {
     if (!currentUser) return;
     const isOnline = currentUser.onlineStatus === "online";
     $("myStatusDot").className = "status-dot " + (isOnline ? "online" : "offline");
-    $("myStatusText").innerText = isOnline ? t("online") : t("offline");
+    $("myStatusText").innerText = isOnline ? "Online" : "Offline";
 }
 
 async function updateOnlineStatus(isOnline) {
@@ -585,7 +752,7 @@ async function toggleOnlineStatus() {
     if (!currentUser) return;
     const newStatus = currentUser.onlineStatus !== "online";
     await updateOnlineStatus(newStatus);
-    toast("", "Status", newStatus ? t("online") : t("offline"));
+    toast("", "Status", newStatus ? "Online" : "Offline");
 }
 
 function startHeartbeat() {
@@ -648,7 +815,7 @@ async function wipeMyData() {
 
 // ==================== INIT ====================
 document.addEventListener("DOMContentLoaded", () => {
-    applyLanguage();
+    generateCaptcha();
     const stored = localStorage.getItem('sp_user');
     if (authToken && stored) {
         currentUser = JSON.parse(stored);
@@ -657,6 +824,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     $("authForm").addEventListener("submit", async (e) => {
         e.preventDefault();
+        if (!verifyCaptcha()) return;
         const email = $("email").value.trim().toLowerCase();
         const password = $("pass").value;
         try {
@@ -673,6 +841,7 @@ document.addEventListener("DOMContentLoaded", () => {
             initApp();
         } catch (err) {
             toast("danger", "Error", err.message);
+            generateCaptcha();
         }
     });
 });
