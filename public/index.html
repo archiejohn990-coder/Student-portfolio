@@ -21,18 +21,18 @@
       </div>
       <form id="authForm">
         <div class="field hidden" id="fieldName">
-          <div class="label">Full Name</div>
+          <div class="label" data-i18n="fullName">Full Name</div>
           <input type="text" id="regName" class="input" placeholder="Juan Dela Cruz">
         </div>
         <div class="field">
-          <div class="label">Email</div>
+          <div class="label" data-i18n="email">Email</div>
           <input type="email" id="email" class="input" placeholder="you@example.com" required>
         </div>
         <div class="field">
-          <div class="label">Password</div>
+          <div class="label" data-i18n="password">Password</div>
           <input type="password" id="pass" class="input" placeholder="password" required>
         </div>
-        <button type="submit" class="btn" id="submitBtn">Login</button>
+        <button type="submit" class="btn" id="submitBtn" data-i18n="login">Login</button>
       </form>
     </div>
   </section>
@@ -46,20 +46,20 @@
           <i class="fas fa-graduation-cap"></i> <span>Student Portfolio</span>
         </div>
         <div class="nav">
-          <a onclick="showView('profile')" id="nav-profile" class="active"><i class="fas fa-id-card"></i> About Me</a>
-          <a onclick="showView('achievements')" id="nav-achievements"><i class="fas fa-trophy"></i> Achievements</a>
-          <a onclick="showView('friends')" id="nav-friends"><i class="fas fa-users"></i> Friends</a>
-          <a onclick="showView('settings')" id="nav-settings"><i class="fas fa-gear"></i> Settings</a>
+          <a onclick="showView('profile')" id="nav-profile" class="active"><i class="fas fa-id-card"></i> <span data-i18n="aboutMe">About Me</span></a>
+          <a onclick="showView('achievements')" id="nav-achievements"><i class="fas fa-trophy"></i> <span data-i18n="achievements">Achievements</span></a>
+          <a onclick="showView('friends')" id="nav-friends"><i class="fas fa-users"></i> <span data-i18n="friends">Friends</span></a>
+          <a onclick="showView('settings')" id="nav-settings"><i class="fas fa-gear"></i> <span data-i18n="settings">Settings</span></a>
         </div>
         <div class="spacer"></div>
-        <a class="nav logout" onclick="logout()"><i class="fas fa-power-off"></i> Logout</a>
+        <a class="nav logout" onclick="logout()"><i class="fas fa-power-off"></i> <span data-i18n="logout">Logout</span></a>
       </nav>
 
       <main class="main">
         <div class="topbar">
           <button class="hamburger" onclick="toggleDrawer()"><i class="fas fa-bars"></i> Menu</button>
           <div style="flex:1;"></div>
-          <button class="btn-ghost" onclick="toggleTheme()"><i class="fas fa-circle-half-stroke"></i> Theme</button>
+          <button class="btn-ghost" onclick="toggleTheme()"><i class="fas fa-circle-half-stroke"></i></button>
           <div class="pill">
             <img id="topAvatar" src="https://ui-avatars.com/api/?background=6366f1&color=fff&name=S" alt="avatar">
             <div>
@@ -71,36 +71,36 @@
 
         <!-- ABOUT ME -->
         <section id="view-profile">
-          <h1><i class="fas fa-id-card"></i> About Me</h1>
+          <h1><i class="fas fa-id-card"></i> <span data-i18n="aboutMe">About Me</span></h1>
           <div class="card">
-            <h3><i class="fas fa-user"></i> Personal Info</h3>
+            <h3><i class="fas fa-user"></i> <span data-i18n="personalInfo">Personal Info</span></h3>
             <div class="row">
-              <div class="field"><div class="label">Full Name</div><input id="pName" class="input" placeholder="Juan Dela Cruz"></div>
-              <div class="field"><div class="label">Course</div><input id="pCourse" class="input" placeholder="BSIT"></div>
+              <div class="field"><div class="label" data-i18n="fullName">Full Name</div><input id="pName" class="input"></div>
+              <div class="field"><div class="label" data-i18n="course">Course</div><input id="pCourse" class="input"></div>
             </div>
             <div class="row">
-              <div class="field"><div class="label">School</div><input id="pSchool" class="input" placeholder="University of..."></div>
-              <div class="field"><div class="label">Year Level</div><input id="pYear" class="input" placeholder="3rd Year"></div>
+              <div class="field"><div class="label" data-i18n="school">School</div><input id="pSchool" class="input"></div>
+              <div class="field"><div class="label" data-i18n="yearLevel">Year Level</div><input id="pYear" class="input"></div>
             </div>
-            <div class="field"><div class="label">Motto</div><input id="pMotto" class="input" placeholder="Live life to the fullest"></div>
-            <div class="field"><div class="label">Bio</div><textarea id="pBio" class="input" rows="4"></textarea></div>
+            <div class="field"><div class="label" data-i18n="motto">Motto</div><input id="pMotto" class="input"></div>
+            <div class="field"><div class="label" data-i18n="bio">Bio</div><textarea id="pBio" class="input" rows="4"></textarea></div>
             <div class="row">
-              <div class="field"><div class="label">Hobbies (comma sep.)</div><input id="pHobbies" class="input"></div>
-              <div class="field"><div class="label">Skills (comma sep.)</div><input id="pSkills" class="input"></div>
+              <div class="field"><div class="label" data-i18n="hobbies">Hobbies</div><input id="pHobbies" class="input"></div>
+              <div class="field"><div class="label" data-i18n="skills">Skills</div><input id="pSkills" class="input"></div>
             </div>
             <div class="button-row-center">
-              <button class="btn-inline" onclick="saveProfile()"><i class="fas fa-save"></i> Save Profile</button>
+              <button class="btn-inline" onclick="saveProfile()"><i class="fas fa-save"></i> <span data-i18n="save">Save</span></button>
             </div>
           </div>
         </section>
 
         <!-- ACHIEVEMENTS -->
         <section id="view-achievements" class="hidden">
-          <h1><i class="fas fa-trophy"></i> My Achievements</h1>
+          <h1><i class="fas fa-trophy"></i> <span data-i18n="achievements">Achievements</span></h1>
           <div class="card">
             <div class="row" style="margin-bottom:12px;">
               <div class="field" style="margin-top:0;">
-                <div class="label">Filter by Category</div>
+                <div class="label" data-i18n="filterCategory">Filter</div>
                 <select id="achFilter" class="input" onchange="loadAchievements()">
                   <option value="">All</option>
                   <option>Academic</option><option>Sports</option>
@@ -109,7 +109,7 @@
               </div>
               <div class="field" style="margin-top:0; display:flex; align-items:flex-end;">
                 <button class="btn-inline" onclick="openAchievementModal()" style="width:100%;">
-                  <i class="fas fa-plus"></i> Add Achievement
+                  <i class="fas fa-plus"></i> <span data-i18n="addAchievement">Add Achievement</span>
                 </button>
               </div>
             </div>
@@ -119,79 +119,129 @@
 
         <!-- FRIENDS -->
         <section id="view-friends" class="hidden">
-          <h1><i class="fas fa-users"></i> Friends</h1>
+          <h1><i class="fas fa-users"></i> <span data-i18n="friends">Friends</span></h1>
 
           <div class="card">
-            <h3><i class="fas fa-user-plus"></i> Add a Friend</h3>
+            <h3><i class="fas fa-user-plus"></i> <span data-i18n="addFriend">Add a Friend</span></h3>
             <div class="row">
               <div class="field" style="margin-top:0;">
                 <input id="friendEmail" class="input" placeholder="friend@example.com">
               </div>
               <div class="field" style="margin-top:0; max-width:150px;">
                 <button class="btn-inline" style="width:100%;" onclick="addFriendAction()">
-                  <i class="fas fa-paper-plane"></i> Send
+                  <i class="fas fa-paper-plane"></i> <span data-i18n="send">Send</span>
                 </button>
               </div>
             </div>
           </div>
 
           <div class="card">
-            <h3><i class="fas fa-bell"></i> Pending Requests</h3>
+            <h3><i class="fas fa-bell"></i> <span data-i18n="pendingRequests">Pending Requests</span></h3>
             <div id="pendingRequests"></div>
           </div>
 
           <div class="card">
-            <h3><i class="fas fa-users"></i> My Friends <span id="onlineCount" class="muted"></span></h3>
+            <h3><i class="fas fa-users"></i> <span data-i18n="myFriends">My Friends</span> <span id="onlineCount" class="muted"></span></h3>
             <div id="friendsList"></div>
           </div>
         </section>
 
-        <!-- SETTINGS -->
-        <section id="view-settings" class="hidden">
-          <h1><i class="fas fa-gear"></i> Settings</h1>
-          <div class="card" style="text-align:center;">
-            <div style="width:120px; height:120px; border-radius:999px; margin:0 auto 14px; overflow:hidden;">
-              <img id="userAvatar" style="width:100%; height:100%; object-fit:cover;" src="https://ui-avatars.com/api/?background=6366f1&color=fff&name=S">
-            </div>
-            <input type="file" id="fileInp" class="hidden" accept="image/*" onchange="uploadPhoto(event)">
-            <div>
-              <button class="btn-inline" onclick="document.getElementById('fileInp').click()"><i class="fas fa-image"></i> Change Photo</button>
-            </div>
-            <div class="card" style="max-width:520px; margin:16px auto 0; text-align:left;">
-              <div class="label">Full Name</div>
-              <div style="font-weight:800;" id="profName">Name</div>
-              <div class="label" style="margin-top:12px;">Email</div>
-              <div style="font-weight:700;" id="profEmail">Email</div>
-              <div class="label" style="margin-top:12px;">Visibility</div>
-              <div class="friend-status">
-                <span class="status-dot online" id="myStatusDot"></span>
-                <span id="myStatusText">Online</span>
-                <button class="btn-ghost" style="margin-left:10px; padding:5px 10px;" onclick="toggleOnlineStatus()">Toggle</button>
-              </div>
-              <div class="label" style="margin-top:12px;">Danger Zone</div>
-              <button class="btn-inline btn-danger" onclick="wipeMyData()"><i class="fas fa-trash"></i> Delete My Account</button>
-            </div>
-          </div>
-        </section>
-
-        <!-- FRIEND DETAIL VIEW -->
+        <!-- FRIEND DETAIL -->
         <section id="view-friend-detail" class="hidden">
-          <button class="btn-ghost" onclick="showView('friends')"><i class="fas fa-arrow-left"></i> Back</button>
+          <button class="btn-ghost" onclick="showView('friends')"><i class="fas fa-arrow-left"></i> <span data-i18n="back">Back</span></button>
           <div class="card" style="margin-top:12px;">
             <div style="display:flex; gap:20px; align-items:center;">
               <img id="fdPhoto" style="width:90px; height:90px; border-radius:50%; object-fit:cover; border:3px solid var(--primary);" src="">
               <div>
                 <h2 id="fdName">Friend</h2>
-                <p class="muted" id="fdStatus">Offline</p>
+                <p class="muted" id="fdStatus"></p>
                 <p class="muted" id="fdCourse"></p>
               </div>
+              <div style="flex:1;"></div>
+              <button class="btn-inline" onclick="openChat()"><i class="fas fa-comments"></i> <span data-i18n="chat">Chat</span></button>
             </div>
             <div id="fdBio" style="margin-top:14px;"></div>
             <div id="fdMotto" style="margin-top:8px; font-style:italic;"></div>
           </div>
           <div class="card">
-            <h3><i class="fas fa-trophy"></i> Public Achievements</h3>
+            <h3><i class="fas fa-trophy"></i> <span data-i18n="publicAchievements">Public Achievements</span></h3>
             <div id="fdAchievements"></div>
+          </div>
+        </section>
+
+        <!-- CHAT -->
+        <section id="view-chat" class="hidden">
+          <button class="btn-ghost" onclick="showView('friend-detail')"><i class="fas fa-arrow-left"></i> <span data-i18n="back">Back</span></button>
+          <div class="card" style="margin-top:12px; display:flex; flex-direction:column; height: calc(100vh - 200px);">
+            <div style="display:flex; align-items:center; gap:12px; padding-bottom:12px; border-bottom:1px solid var(--border);">
+              <img id="chatAvatar" style="width:44px; height:44px; border-radius:50%; object-fit:cover;" src="">
+              <div>
+                <div style="font-weight:800;" id="chatName">Friend</div>
+                <div class="friend-status"><span id="chatStatusDot" class="status-dot offline"></span><span id="chatStatusText">Offline</span></div>
+              </div>
+            </div>
+            <div id="chatMessages" style="flex:1; overflow-y:auto; padding:14px 0; display:flex; flex-direction:column; gap:8px;"></div>
+            <div style="display:flex; gap:8px; padding-top:12px; border-top:1px solid var(--border);">
+              <input id="chatInput" class="input" placeholder="Type a message..." onkeydown="if(event.key==='Enter')sendMessage()">
+              <button class="btn-inline" onclick="sendMessage()"><i class="fas fa-paper-plane"></i></button>
+            </div>
+          </div>
+        </section>
+
+        <!-- SETTINGS -->
+        <section id="view-settings" class="hidden">
+          <h1><i class="fas fa-gear"></i> <span data-i18n="settings">Settings</span></h1>
+
+          <div class="card" style="text-align:center;">
+            <div style="width:120px; height:120px; border-radius:999px; margin:0 auto 14px; overflow:hidden;">
+              <img id="userAvatar" style="width:100%; height:100%; object-fit:cover;" src="">
+            </div>
+            <input type="file" id="fileInp" class="hidden" accept="image/*" onchange="uploadPhoto(event)">
+            <button class="btn-inline" onclick="document.getElementById('fileInp').click()">
+              <i class="fas fa-image"></i> <span data-i18n="changePhoto">Change Photo</span>
+            </button>
+          </div>
+
+          <div class="card">
+            <h3><i class="fas fa-key"></i> <span data-i18n="changePassword">Change Password</span></h3>
+            <div class="field">
+              <div class="label" data-i18n="currentPassword">Current Password</div>
+              <input type="password" id="curPass" class="input">
+            </div>
+            <div class="field">
+              <div class="label" data-i18n="newPassword">New Password</div>
+              <input type="password" id="newPass" class="input">
+            </div>
+            <div class="button-row-center">
+              <button class="btn-inline" onclick="changePassword()"><i class="fas fa-save"></i> <span data-i18n="save">Save</span></button>
+            </div>
+          </div>
+
+          <div class="card">
+            <h3><i class="fas fa-globe"></i> <span data-i18n="language">Language</span></h3>
+            <div class="field">
+              <select id="langSelect" class="input" onchange="changeLanguage(this.value)">
+                <option value="en">English</option>
+                <option value="fil">Filipino</option>
+                <option value="es">Español</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="card">
+            <h3><i class="fas fa-user"></i> <span data-i18n="account">Account</span></h3>
+            <div class="label" data-i18n="fullName">Full Name</div>
+            <div style="font-weight:800;" id="profName">Name</div>
+            <div class="label" style="margin-top:12px;" data-i18n="email">Email</div>
+            <div style="font-weight:700;" id="profEmail">Email</div>
+            <div class="label" style="margin-top:12px;" data-i18n="visibility">Visibility</div>
+            <div class="friend-status">
+              <span class="status-dot online" id="myStatusDot"></span>
+              <span id="myStatusText">Online</span>
+              <button class="btn-ghost" style="margin-left:10px; padding:5px 10px;" onclick="toggleOnlineStatus()">Toggle</button>
+            </div>
+            <div class="label" style="margin-top:12px;" data-i18n="dangerZone">Danger Zone</div>
+            <button class="btn-inline btn-danger" onclick="wipeMyData()"><i class="fas fa-trash"></i> <span data-i18n="deleteAccount">Delete Account</span></button>
           </div>
         </section>
       </main>
@@ -206,29 +256,29 @@
         <button class="iconbtn" onclick="closeAchievementModal()"><i class="fas fa-xmark"></i></button>
       </div>
       <div class="modal-body">
-        <div class="field"><div class="label">Title</div><input id="achTitle" class="input"></div>
+        <div class="field"><div class="label" data-i18n="title">Title</div><input id="achTitle" class="input"></div>
         <div class="row">
           <div class="field">
-            <div class="label">Category</div>
+            <div class="label" data-i18n="category">Category</div>
             <select id="achCategory" class="input">
               <option>Academic</option><option>Sports</option>
               <option>Leadership</option><option>Personal</option><option>Other</option>
             </select>
           </div>
-          <div class="field"><div class="label">Date</div><input id="achDate" type="date" class="input"></div>
+          <div class="field"><div class="label" data-i18n="date">Date</div><input id="achDate" type="date" class="input"></div>
         </div>
         <div class="field">
-          <div class="label">Visibility</div>
+          <div class="label" data-i18n="visibility">Visibility</div>
           <select id="achVisibility" class="input">
-            <option value="public">Public (friends can see)</option>
-            <option value="private">Private (only me)</option>
+            <option value="public" data-i18n="public">Public (friends see)</option>
+            <option value="private" data-i18n="private">Private</option>
           </select>
         </div>
-        <div class="field"><div class="label">Description</div><textarea id="achDesc" class="input" rows="3"></textarea></div>
+        <div class="field"><div class="label" data-i18n="description">Description</div><textarea id="achDesc" class="input" rows="3"></textarea></div>
       </div>
       <div class="modal-foot">
-        <button class="btn-ghost" onclick="closeAchievementModal()">Cancel</button>
-        <button class="btn-inline" onclick="saveAchievement()">Save</button>
+        <button class="btn-ghost" onclick="closeAchievementModal()" data-i18n="cancel">Cancel</button>
+        <button class="btn-inline" onclick="saveAchievement()" data-i18n="save">Save</button>
       </div>
     </div>
   </div>
