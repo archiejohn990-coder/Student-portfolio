@@ -1,5 +1,5 @@
 /* ============================================================
-   STUDENT PORTFOLIO — Complete System
+   STUDENT PORTFOLIO — Complete System with Tab Animations
    ============================================================ */
 
 const API_URL = '';
@@ -13,6 +13,9 @@ let chatPollInterval = null;
 let postsTab = 'feed';
 let captchaCode = "";
 let postImageB64 = null;
+
+// View order for directional animation
+const VIEW_ORDER = ["profile", "posts", "achievements", "friends", "settings", "friend-detail", "chat"];
 
 // ==================== HELPERS ====================
 function $(id) { return document.getElementById(id); }
@@ -205,20 +208,49 @@ function hydrateTopBar() {
     $("setName").value = currentUser.fullName;
 }
 
-// ==================== NAVIGATION ====================
+// ==================== NAVIGATION (WITH ANIMATIONS) ====================
 function showView(v) {
-    ["profile", "posts", "achievements", "friends", "settings", "friend-detail", "chat"].forEach(id => {
+    // Determine current view index for directional animation
+    const currentIdx = VIEW_ORDER.findIndex(id => {
         const el = $("view-" + id);
-        if (el) el.classList.add("hidden");
+        return el && !el.classList.contains("hidden");
     });
-    $("view-" + v).classList.remove("hidden");
+    const nextIdx = VIEW_ORDER.indexOf(v);
+    const goRight = nextIdx >= currentIdx;
 
+    // Hide all views and clear previous animation classes
+    VIEW_ORDER.forEach(id => {
+        const el = $("view-" + id);
+        if (el) {
+            el.classList.add("hidden");
+            el.classList.remove("view-enter-right", "view-enter-left");
+        }
+    });
+
+    // Show target view with directional animation
+    const target = $("view-" + v);
+    if (target) {
+        target.classList.remove("hidden");
+        // Force reflow so animation replays even on same view
+        void target.offsetWidth;
+        target.classList.add(goRight ? "view-enter-right" : "view-enter-left");
+        setTimeout(() => {
+            target.classList.remove("view-enter-right", "view-enter-left");
+        }, 500);
+
+        // Smooth scroll to top
+        const main = document.querySelector(".main");
+        if (main) main.scrollTo({ top: 0, behavior: "smooth" });
+    }
+
+    // Update active nav
     document.querySelectorAll(".nav a").forEach(a => a.classList.remove("active"));
     const nav = $("nav-" + v);
     if (nav) nav.classList.add("active");
 
     if (window.innerWidth <= 820) closeDrawer();
 
+    // Load data per view
     if (v === "profile") { loadProfile(); loadSettingsProfile(); }
     if (v === "posts") loadPosts();
     if (v === "achievements") loadAchievements();
