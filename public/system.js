@@ -1,13 +1,103 @@
 /* ============================================================
-   STUDENT PORTFOLIO — with Friends, Status, Achievements
+   STUDENT PORTFOLIO — Full feature set
    ============================================================ */
 
-const API_URL = ''; // same origin — leave empty
+const API_URL = '';
 let currentUser = null;
 let authToken = localStorage.getItem('sp_token');
 let authMode = "login";
 let editingAchievementId = null;
 let heartbeatInterval = null;
+let activeFriendId = null;
+let chatPollInterval = null;
+let language = localStorage.getItem('sp_lang') || 'en';
+
+// ==================== TRANSLATIONS ====================
+const TRANSLATIONS = {
+    en: {
+        fullName: "Full Name", email: "Email", password: "Password",
+        login: "Login", signup: "Sign Up", logout: "Logout",
+        aboutMe: "About Me", achievements: "Achievements", friends: "Friends",
+        settings: "Settings", save: "Save", cancel: "Cancel", back: "Back",
+        addFriend: "Add a Friend", send: "Send", pendingRequests: "Pending Requests",
+        myFriends: "My Friends", chat: "Chat", publicAchievements: "Public Achievements",
+        personalInfo: "Personal Info", course: "Course", school: "School",
+        yearLevel: "Year Level", motto: "Motto", bio: "Bio",
+        hobbies: "Hobbies", skills: "Skills", filterCategory: "Filter",
+        addAchievement: "Add Achievement", title: "Title", category: "Category",
+        date: "Date", visibility: "Visibility", description: "Description",
+        public: "Public (friends see)", private: "Private",
+        changePassword: "Change Password", currentPassword: "Current Password",
+        newPassword: "New Password", changePhoto: "Change Photo",
+        language: "Language", account: "Account", dangerZone: "Danger Zone",
+        deleteAccount: "Delete Account", online: "Online", offline: "Offline"
+    },
+    fil: {
+        fullName: "Buong Pangalan", email: "Email", password: "Password",
+        login: "Mag-login", signup: "Mag-sign Up", logout: "Mag-logout",
+        aboutMe: "Tungkol sa Akin", achievements: "Mga Tagumpay", friends: "Mga Kaibigan",
+        settings: "Mga Setting", save: "I-save", cancel: "Kanselahin", back: "Bumalik",
+        addFriend: "Magdagdag ng Kaibigan", send: "Ipadala", pendingRequests: "Mga Kahilingan",
+        myFriends: "Aking mga Kaibigan", chat: "Makipag-usap", publicAchievements: "Pampublikong Tagumpay",
+        personalInfo: "Personal na Impormasyon", course: "Kurso", school: "Paaralan",
+        yearLevel: "Antas ng Taon", motto: "Motto", bio: "Tungkol sa Sarili",
+        hobbies: "Mga Libangan", skills: "Mga Kasanayan", filterCategory: "Salain",
+        addAchievement: "Magdagdag ng Tagumpay", title: "Pamagat", category: "Kategorya",
+        date: "Petsa", visibility: "Pagkakita", description: "Paglalarawan",
+        public: "Pampubliko (nakikita ng kaibigan)", private: "Pribado",
+        changePassword: "Palitan ang Password", currentPassword: "Kasalukuyang Password",
+        newPassword: "Bagong Password", changePhoto: "Palitan ang Larawan",
+        language: "Wika", account: "Account", dangerZone: "Mapanganib",
+        deleteAccount: "Burahin ang Account", online: "Online", offline: "Offline"
+    },
+    es: {
+        fullName: "Nombre Completo", email: "Correo", password: "Contraseña",
+        login: "Iniciar Sesión", signup: "Registrarse", logout: "Cerrar Sesión",
+        aboutMe: "Sobre Mí", achievements: "Logros", friends: "Amigos",
+        settings: "Ajustes", save: "Guardar", cancel: "Cancelar", back: "Atrás",
+        addFriend: "Añadir Amigo", send: "Enviar", pendingRequests: "Solicitudes Pendientes",
+        myFriends: "Mis Amigos", chat: "Chatear", publicAchievements: "Logros Públicos",
+        personalInfo: "Información Personal", course: "Curso", school: "Escuela",
+        yearLevel: "Año", motto: "Lema", bio: "Biografía",
+        hobbies: "Pasatiempos", skills: "Habilidades", filterCategory: "Filtrar",
+        addAchievement: "Añadir Logro", title: "Título", category: "Categoría",
+        date: "Fecha", visibility: "Visibilidad", description: "Descripción",
+        public: "Público (visible a amigos)", private: "Privado",
+        changePassword: "Cambiar Contraseña", currentPassword: "Contraseña Actual",
+        newPassword: "Nueva Contraseña", changePhoto: "Cambiar Foto",
+        language: "Idioma", account: "Cuenta", dangerZone: "Zona de Peligro",
+        deleteAccount: "Eliminar Cuenta", online: "En línea", offline: "Desconectado"
+    }
+};
+
+function t(key) {
+    return TRANSLATIONS[language]?.[key] || TRANSLATIONS.en[key] || key;
+}
+
+function applyLanguage() {
+    document.querySelectorAll('[data-i18n]').forEach(el => {
+        const key = el.getAttribute('data-i18n');
+        if (TRANSLATIONS[language]?.[key]) {
+            if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
+                el.placeholder = TRANSLATIONS[language][key];
+            } else {
+                el.innerText = TRANSLATIONS[language][key];
+            }
+        }
+    });
+}
+
+function changeLanguage(lang) {
+    language = lang;
+    localStorage.setItem('sp_lang', lang);
+    applyLanguage();
+    // Persist to server
+    if (authToken) {
+        apiCall('/api/user/language', {
+            method: 'PUT', body: JSON.stringify({ language: lang })
+        }).catch(() => {});
+    }
+}
 
 // ==================== HELPERS ====================
 function $(id) { return document.getElementById(id); }
@@ -15,6 +105,14 @@ function escapeHtml(str) {
     return String(str ?? "").replace(/[&<>"']/g, m => ({
         '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
     }[m]));
+}
+function timeAgo(date) {
+    if (!date) return "";
+    const s = Math.floor((Date.now() - new Date(date).getTime()) / 1000);
+    if (s < 60) return "just now";
+    if (s < 3600) return Math.floor(s / 60) + "m ago";
+    if (s < 86400) return Math.floor(s / 3600) + "h ago";
+    return Math.floor(s / 86400) + "d ago";
 }
 function toast(type, title, msg) {
     const wrap = $("toastWrap");
@@ -62,13 +160,12 @@ function toggleMode(mode) {
     $("tabLogin").classList.toggle("active", mode === "login");
     $("tabSignup").classList.toggle("active", mode === "signup");
     $("fieldName").classList.toggle("hidden", mode === "login");
-    $("submitBtn").innerText = mode === "login" ? "Login" : "Create Account";
+    $("submitBtn").innerText = mode === "login" ? t("login") : t("signup");
 }
 
 async function signup(fullName, email, password) {
     const data = await apiCall('/api/signup', {
-        method: 'POST',
-        body: JSON.stringify({ fullName, email, password })
+        method: 'POST', body: JSON.stringify({ fullName, email, password })
     });
     authToken = data.token;
     localStorage.setItem('sp_token', authToken);
@@ -78,13 +175,16 @@ async function signup(fullName, email, password) {
 
 async function login(email, password) {
     const data = await apiCall('/api/login', {
-        method: 'POST',
-        body: JSON.stringify({ email, password })
+        method: 'POST', body: JSON.stringify({ email, password })
     });
     authToken = data.token;
     localStorage.setItem('sp_token', authToken);
     currentUser = data.student;
     localStorage.setItem('sp_user', JSON.stringify(currentUser));
+    if (data.student.language) {
+        language = data.student.language;
+        localStorage.setItem('sp_lang', language);
+    }
 }
 
 function logout() {
@@ -95,13 +195,15 @@ function logout() {
     location.reload();
 }
 
-// ==================== APP INIT ====================
+// ==================== INIT ====================
 async function initApp() {
     $("authSection").style.display = "none";
     $("app").style.display = "block";
+    applyLanguage();
     hydrateTopBar();
     showView("profile");
     startHeartbeat();
+    checkUnreadCount();
 }
 
 function hydrateTopBar() {
@@ -113,11 +215,12 @@ function hydrateTopBar() {
     $("userAvatar").src = av;
     $("profName").innerText = currentUser.fullName;
     $("profEmail").innerText = currentUser.email;
+    $("langSelect").value = language;
 }
 
 // ==================== NAVIGATION ====================
 function showView(v) {
-    ["profile", "achievements", "friends", "settings", "friend-detail"].forEach(id => {
+    ["profile", "achievements", "friends", "settings", "friend-detail", "chat"].forEach(id => {
         const el = $("view-" + id);
         if (el) el.classList.add("hidden");
     });
@@ -188,10 +291,7 @@ async function loadAchievements() {
         if (filter) list = list.filter(a => a.category === filter);
 
         const c = $("achievementsList");
-        if (list.length === 0) {
-            c.innerHTML = '<p class="empty">No achievements yet.</p>';
-            return;
-        }
+        if (list.length === 0) { c.innerHTML = '<p class="empty">No achievements yet.</p>'; return; }
         c.innerHTML = list.map(a => `
             <div class="card" style="border-left:4px solid var(--primary); margin-bottom:10px;">
                 <div class="entry">
@@ -201,8 +301,8 @@ async function loadAchievements() {
                         ${a.description ? `<p>${escapeHtml(a.description)}</p>` : ""}
                         <div class="chips">
                             ${a.visibility === "private"
-                                ? '<span class="chip private"><i class="fas fa-lock"></i> Private</span>'
-                                : '<span class="chip"><i class="fas fa-eye"></i> Public</span>'}
+                                ? `<span class="chip private"><i class="fas fa-lock"></i> ${t("private")}</span>`
+                                : `<span class="chip"><i class="fas fa-eye"></i> ${t("public")}</span>`}
                         </div>
                     </div>
                     <div class="entry-actions">
@@ -217,7 +317,7 @@ async function loadAchievements() {
 
 function openAchievementModal(ach = null) {
     editingAchievementId = ach?._id || null;
-    $("achModalTitle").innerText = editingAchievementId ? "Edit Achievement" : "New Achievement";
+    $("achModalTitle").innerText = editingAchievementId ? "Edit" : "New Achievement";
     $("achTitle").value = ach?.title || "";
     $("achCategory").value = ach?.category || "Academic";
     $("achDate").value = ach?.date || new Date().toISOString().slice(0,10);
@@ -232,7 +332,7 @@ function closeAchievementModal() {
 
 async function saveAchievement() {
     const title = $("achTitle").value.trim();
-    if (!title) return toast("warn", "Missing title", "Enter a title.");
+    if (!title) return toast("warn", "Missing", "Enter a title.");
     const body = {
         title,
         description: $("achDesc").value.trim(),
@@ -242,13 +342,9 @@ async function saveAchievement() {
     };
     try {
         if (editingAchievementId) {
-            await apiCall(`/api/achievements/${editingAchievementId}`, {
-                method: 'PUT', body: JSON.stringify(body)
-            });
+            await apiCall(`/api/achievements/${editingAchievementId}`, { method: 'PUT', body: JSON.stringify(body) });
         } else {
-            await apiCall('/api/achievements', {
-                method: 'POST', body: JSON.stringify(body)
-            });
+            await apiCall('/api/achievements', { method: 'POST', body: JSON.stringify(body) });
         }
         toast("success", "Saved", "Achievement saved.");
         closeAchievementModal();
@@ -263,23 +359,22 @@ async function editAchievement(id) {
 }
 
 async function deleteAchievement(id) {
-    if (!confirm("Delete this achievement?")) return;
+    if (!confirm("Delete?")) return;
     await apiCall(`/api/achievements/${id}`, { method: 'DELETE' });
-    toast("", "Deleted", "Achievement removed.");
+    toast("", "Deleted", "");
     loadAchievements();
 }
 
 // ==================== FRIENDS ====================
 async function addFriendAction() {
     const email = $("friendEmail").value.trim().toLowerCase();
-    if (!email) return toast("warn", "Missing email", "Enter an email.");
+    if (!email) return toast("warn", "Missing", "Enter an email.");
     try {
         await apiCall('/api/friends/request', {
-            method: 'POST',
-            body: JSON.stringify({ toUserEmail: email })
+            method: 'POST', body: JSON.stringify({ toUserEmail: email })
         });
         $("friendEmail").value = "";
-        toast("success", "Sent", `Request sent to ${email}`);
+        toast("success", "Sent", `Request sent`);
     } catch (e) { toast("danger", "Error", e.message); }
 }
 
@@ -287,7 +382,7 @@ async function loadRequests() {
     try {
         const data = await apiCall('/api/friends/requests');
         const c = $("pendingRequests");
-        if (!data.requests || data.requests.length === 0) {
+        if (!data.requests?.length) {
             c.innerHTML = '<p class="muted" style="text-align:center;">No pending requests.</p>';
             return;
         }
@@ -300,7 +395,7 @@ async function loadRequests() {
                         <div class="friend-email">${escapeHtml(r.fromEmail)}</div>
                     </div>
                 </div>
-                <button class="btn-inline" onclick="acceptFriend('${r.id}')"><i class="fas fa-check"></i> Accept</button>
+                <button class="btn-inline" onclick="acceptFriend('${r.id}')"><i class="fas fa-check"></i></button>
             </div>
         `).join("");
     } catch (e) { console.error(e); }
@@ -319,7 +414,7 @@ async function loadFriends() {
     try {
         const data = await apiCall('/api/friends/list');
         const c = $("friendsList");
-        if (!data.friends || data.friends.length === 0) {
+        if (!data.friends?.length) {
             c.innerHTML = '<p class="muted" style="text-align:center;">No friends yet.</p>';
             $("onlineCount").innerText = "";
             return;
@@ -337,7 +432,7 @@ async function loadFriends() {
                             <div class="friend-email">${escapeHtml(f.email)}</div>
                             <div class="friend-status">
                                 <span class="status-dot ${f.onlineStatus}"></span>
-                                <span>${f.onlineStatus === "online" ? "Online" : "Offline"}</span>
+                                <span>${f.onlineStatus === "online" ? t("online") : `Last seen ${timeAgo(f.lastSeen)}`}</span>
                             </div>
                         </div>
                     </div>
@@ -354,12 +449,13 @@ async function unfriend(id, email) {
     await apiCall('/api/friends/unfriend', {
         method: 'POST', body: JSON.stringify({ friendId: id })
     });
-    toast("", "Unfriended", "Removed.");
+    toast("", "Unfriended", "");
     loadFriends();
 }
 
 async function viewFriendProfile(id) {
     try {
+        activeFriendId = id;
         const data = await apiCall(`/api/friends/${id}/profile`);
         const f = data.friend;
         const p = data.portfolio || {};
@@ -367,9 +463,9 @@ async function viewFriendProfile(id) {
 
         $("fdPhoto").src = av;
         $("fdName").innerText = f.name;
-        $("fdStatus").innerHTML = `<span class="status-dot ${f.onlineStatus}"></span> ${f.onlineStatus === "online" ? "Online" : "Offline"}`;
-        $("fdCourse").innerText = [p.course, p.school, p.yearLevel].filter(Boolean).join(" • ") || "";
-        $("fdBio").innerText = p.bio || "No bio.";
+        $("fdStatus").innerHTML = `<span class="status-dot ${f.onlineStatus}"></span> ${f.onlineStatus === "online" ? t("online") : `Last seen ${timeAgo(f.lastSeen)}`}`;
+        $("fdCourse").innerText = [p.course, p.school, p.yearLevel].filter(Boolean).join(" • ");
+        $("fdBio").innerText = p.bio || "";
         $("fdMotto").innerText = p.motto ? `"${p.motto}"` : "";
 
         const ach = data.achievements || [];
@@ -377,7 +473,7 @@ async function viewFriendProfile(id) {
             ? '<p class="muted">No public achievements yet.</p>'
             : ach.map(a => `
                 <div class="card" style="border-left:4px solid var(--primary); margin-bottom:10px;">
-                    <small>${escapeHtml(a.date || "No date")} • ${escapeHtml(a.category)}</small>
+                    <small>${escapeHtml(a.date || "")} • ${escapeHtml(a.category)}</small>
                     <h4><i class="fas fa-trophy" style="color:var(--primary);"></i> ${escapeHtml(a.title)}</h4>
                     ${a.description ? `<p>${escapeHtml(a.description)}</p>` : ""}
                 </div>
@@ -387,21 +483,85 @@ async function viewFriendProfile(id) {
     } catch (e) { toast("danger", "Error", e.message); }
 }
 
+// ==================== CHAT ====================
+function openChat() {
+    if (!activeFriendId) return;
+    showView("chat");
+    // populate header
+    const friendName = $("fdName").innerText;
+    const friendPhoto = $("fdPhoto").src;
+    $("chatName").innerText = friendName;
+    $("chatAvatar").src = friendPhoto;
+    $("chatStatusDot").className = $("fdStatus").querySelector(".status-dot")?.className || "status-dot offline";
+    $("chatStatusText").innerText = $("fdStatus").innerText.replace(/^[^\s]+\s/, '');
+
+    loadChat();
+    if (chatPollInterval) clearInterval(chatPollInterval);
+    chatPollInterval = setInterval(loadChat, 3000);
+}
+
+async function loadChat() {
+    if (!activeFriendId) return;
+    try {
+        const data = await apiCall(`/api/chat/${activeFriendId}`);
+        const c = $("chatMessages");
+        if (!data.messages?.length) {
+            c.innerHTML = '<p class="muted" style="text-align:center;">No messages yet. Say hi!</p>';
+            return;
+        }
+        c.innerHTML = data.messages.map(m => {
+            const isMine = m.from === currentUser.id;
+            const time = new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            return `<div class="msg-wrap ${isMine ? 'mine' : 'theirs'}">
+                <div class="msg ${isMine ? 'mine' : 'theirs'}">${escapeHtml(m.text)}</div>
+                <div class="msg-time">${time}</div>
+            </div>`;
+        }).join("");
+        c.scrollTop = c.scrollHeight;
+    } catch (e) { console.error(e); }
+}
+
+async function sendMessage() {
+    const input = $("chatInput");
+    const text = input.value.trim();
+    if (!text || !activeFriendId) return;
+    input.value = "";
+    try {
+        await apiCall(`/api/chat/${activeFriendId}`, {
+            method: 'POST', body: JSON.stringify({ text })
+        });
+        loadChat();
+    } catch (e) { toast("danger", "Error", e.message); }
+}
+
+async function checkUnreadCount() {
+    try {
+        const data = await apiCall('/api/chat/unread/count');
+        const navFriends = $("nav-friends");
+        const existing = navFriends.querySelector(".badge");
+        if (existing) existing.remove();
+        if (data.count > 0) {
+            const badge = document.createElement("span");
+            badge.className = "badge";
+            badge.innerText = data.count;
+            navFriends.appendChild(badge);
+        }
+    } catch {}
+}
+setInterval(checkUnreadCount, 15000);
+
 // ==================== STATUS ====================
 function updateStatusUI() {
     if (!currentUser) return;
-    const dot = $("myStatusDot");
-    const txt = $("myStatusText");
     const isOnline = currentUser.onlineStatus === "online";
-    dot.className = "status-dot " + (isOnline ? "online" : "offline");
-    txt.innerText = isOnline ? "Online" : "Offline";
+    $("myStatusDot").className = "status-dot " + (isOnline ? "online" : "offline");
+    $("myStatusText").innerText = isOnline ? t("online") : t("offline");
 }
 
 async function updateOnlineStatus(isOnline) {
     try {
         await apiCall('/api/status/update', {
-            method: 'POST',
-            body: JSON.stringify({ status: isOnline ? "online" : "offline" })
+            method: 'POST', body: JSON.stringify({ status: isOnline ? "online" : "offline" })
         });
         if (currentUser) currentUser.onlineStatus = isOnline ? "online" : "offline";
         updateStatusUI();
@@ -412,7 +572,7 @@ async function toggleOnlineStatus() {
     if (!currentUser) return;
     const newStatus = currentUser.onlineStatus !== "online";
     await updateOnlineStatus(newStatus);
-    toast("", "Status", `You are now ${newStatus ? "Online" : "Offline"}`);
+    toast("", "Status", newStatus ? t("online") : t("offline"));
 }
 
 function startHeartbeat() {
@@ -422,7 +582,6 @@ function startHeartbeat() {
         if (currentUser && document.visibilityState === "visible") updateOnlineStatus(true);
     }, 30000);
 }
-
 function stopHeartbeat() {
     if (heartbeatInterval) { clearInterval(heartbeatInterval); heartbeatInterval = null; }
     if (currentUser) updateOnlineStatus(false);
@@ -430,10 +589,8 @@ function stopHeartbeat() {
 
 window.addEventListener("beforeunload", () => {
     if (!currentUser || !authToken) return;
-    navigator.sendBeacon(
-        "/api/status/update",
-        new Blob([JSON.stringify({ status: "offline", token: authToken })], { type: "application/json" })
-    );
+    navigator.sendBeacon("/api/status/update",
+        new Blob([JSON.stringify({ status: "offline", token: authToken })], { type: "application/json" }));
 });
 
 // ==================== SETTINGS ====================
@@ -454,15 +611,31 @@ async function uploadPhoto(e) {
     reader.readAsDataURL(file);
 }
 
+async function changePassword() {
+    const cur = $("curPass").value;
+    const nw = $("newPass").value;
+    if (!cur || !nw) return toast("warn", "Missing", "Fill in both passwords.");
+    if (nw.length < 6) return toast("warn", "Weak", "Min 6 characters.");
+    try {
+        await apiCall('/api/user/password', {
+            method: 'PUT', body: JSON.stringify({ currentPassword: cur, newPassword: nw })
+        });
+        $("curPass").value = "";
+        $("newPass").value = "";
+        toast("success", "Changed", "Password updated.");
+    } catch (e) { toast("danger", "Error", e.message); }
+}
+
 async function wipeMyData() {
-    if (!confirm("Delete your account permanently?")) return;
-    if (!confirm("Are you SURE? This cannot be undone.")) return;
+    if (!confirm("Delete account permanently?")) return;
+    if (!confirm("Are you SURE?")) return;
     await apiCall('/api/user/delete', { method: 'DELETE' });
     logout();
 }
 
 // ==================== INIT ====================
 document.addEventListener("DOMContentLoaded", () => {
+    applyLanguage();
     const stored = localStorage.getItem('sp_user');
     if (authToken && stored) {
         currentUser = JSON.parse(stored);
@@ -473,7 +646,6 @@ document.addEventListener("DOMContentLoaded", () => {
         e.preventDefault();
         const email = $("email").value.trim().toLowerCase();
         const password = $("pass").value;
-
         try {
             if (authMode === "signup") {
                 const name = $("regName").value.trim();
