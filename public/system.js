@@ -30,7 +30,8 @@ const TRANSLATIONS = {
         changePassword: "Change Password", currentPassword: "Current Password",
         newPassword: "New Password", changePhoto: "Change Photo",
         language: "Language", account: "Account", dangerZone: "Danger Zone",
-        deleteAccount: "Delete Account", online: "Online", offline: "Offline"
+        deleteAccount: "Delete Account", online: "Online", offline: "Offline",
+        visibility_: "Visibility"
     },
     fil: {
         fullName: "Buong Pangalan", email: "Email", password: "Password",
@@ -48,7 +49,8 @@ const TRANSLATIONS = {
         changePassword: "Palitan ang Password", currentPassword: "Kasalukuyang Password",
         newPassword: "Bagong Password", changePhoto: "Palitan ang Larawan",
         language: "Wika", account: "Account", dangerZone: "Mapanganib",
-        deleteAccount: "Burahin ang Account", online: "Online", offline: "Offline"
+        deleteAccount: "Burahin ang Account", online: "Online", offline: "Offline",
+        visibility_: "Pagkakita"
     },
     es: {
         fullName: "Nombre Completo", email: "Correo", password: "Contraseña",
@@ -66,7 +68,8 @@ const TRANSLATIONS = {
         changePassword: "Cambiar Contraseña", currentPassword: "Contraseña Actual",
         newPassword: "Nueva Contraseña", changePhoto: "Cambiar Foto",
         language: "Idioma", account: "Cuenta", dangerZone: "Zona de Peligro",
-        deleteAccount: "Eliminar Cuenta", online: "En línea", offline: "Desconectado"
+        deleteAccount: "Eliminar Cuenta", online: "En línea", offline: "Desconectado",
+        visibility_: "Visibilidad"
     }
 };
 
@@ -77,11 +80,19 @@ function t(key) {
 function applyLanguage() {
     document.querySelectorAll('[data-i18n]').forEach(el => {
         const key = el.getAttribute('data-i18n');
-        if (TRANSLATIONS[language]?.[key]) {
-            if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
-                el.placeholder = TRANSLATIONS[language][key];
+        const translated = TRANSLATIONS[language]?.[key] || TRANSLATIONS.en[key];
+        if (!translated) return;
+        if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
+            el.placeholder = translated;
+        } else if (el.tagName === 'OPTION') {
+            el.textContent = translated;
+        } else {
+            // preserve icon children
+            const hasIcon = el.querySelector('i');
+            if (hasIcon) {
+                el.innerHTML = el.querySelector('i').outerHTML + " " + translated;
             } else {
-                el.innerText = TRANSLATIONS[language][key];
+                el.innerText = translated;
             }
         }
     });
@@ -91,7 +102,6 @@ function changeLanguage(lang) {
     language = lang;
     localStorage.setItem('sp_lang', lang);
     applyLanguage();
-    // Persist to server
     if (authToken) {
         apiCall('/api/user/language', {
             method: 'PUT', body: JSON.stringify({ language: lang })
@@ -141,9 +151,9 @@ async function apiCall(endpoint, options = {}) {
 }
 
 // ==================== THEME ====================
-function applyTheme(t) {
-    document.documentElement.setAttribute("data-theme", t);
-    localStorage.setItem("sp_theme", t);
+function applyTheme(th) {
+    document.documentElement.setAttribute("data-theme", th);
+    localStorage.setItem("sp_theme", th);
 }
 function toggleTheme() {
     const cur = localStorage.getItem("sp_theme") || "light";
@@ -190,6 +200,7 @@ async function login(email, password) {
 function logout() {
     if (!confirm("Log out?")) return;
     stopHeartbeat();
+    if (chatPollInterval) clearInterval(chatPollInterval);
     localStorage.removeItem('sp_token');
     localStorage.removeItem('sp_user');
     location.reload();
@@ -204,6 +215,7 @@ async function initApp() {
     showView("profile");
     startHeartbeat();
     checkUnreadCount();
+    setInterval(checkUnreadCount, 15000);
 }
 
 function hydrateTopBar() {
@@ -236,6 +248,10 @@ function showView(v) {
     if (v === "achievements") loadAchievements();
     if (v === "friends") { loadFriends(); loadRequests(); }
     if (v === "settings") updateStatusUI();
+    if (v !== "chat" && chatPollInterval) {
+        clearInterval(chatPollInterval);
+        chatPollInterval = null;
+    }
 }
 
 function toggleDrawer() {
@@ -487,12 +503,9 @@ async function viewFriendProfile(id) {
 function openChat() {
     if (!activeFriendId) return;
     showView("chat");
-    // populate header
-    const friendName = $("fdName").innerText;
-    const friendPhoto = $("fdPhoto").src;
-    $("chatName").innerText = friendName;
-    $("chatAvatar").src = friendPhoto;
-    $("chatStatusDot").className = $("fdStatus").querySelector(".status-dot")?.className || "status-dot offline";
+    $("chatName").innerText = $("fdName").innerText;
+    $("chatAvatar").src = $("fdPhoto").src;
+    $("chatStatusDot").className = "status-dot " + ($("fdStatus").querySelector(".status-dot")?.className.includes("online") ? "online" : "offline");
     $("chatStatusText").innerText = $("fdStatus").innerText.replace(/^[^\s]+\s/, '');
 
     loadChat();
@@ -535,6 +548,7 @@ async function sendMessage() {
 }
 
 async function checkUnreadCount() {
+    if (!authToken) return;
     try {
         const data = await apiCall('/api/chat/unread/count');
         const navFriends = $("nav-friends");
@@ -548,7 +562,6 @@ async function checkUnreadCount() {
         }
     } catch {}
 }
-setInterval(checkUnreadCount, 15000);
 
 // ==================== STATUS ====================
 function updateStatusUI() {
