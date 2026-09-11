@@ -131,7 +131,7 @@
         </div>
 
         <!-- ABOUT ME -->
-        <section id="view-profile">
+        <section id="view-profile" class="view">
           <h1><i class="fas fa-id-card"></i> About Me</h1>
           <div class="card">
             <h3><i class="fas fa-user"></i> Personal Info</h3>
@@ -167,7 +167,7 @@
         </section>
 
         <!-- PHOTOS -->
-        <section id="view-posts" class="hidden">
+        <section id="view-posts" class="hidden view">
           <h1><i class="fas fa-images"></i> Photos</h1>
           <div class="card">
             <h3><i class="fas fa-plus"></i> New Post</h3>
@@ -199,7 +199,7 @@
         </section>
 
         <!-- ACHIEVEMENTS -->
-        <section id="view-achievements" class="hidden">
+        <section id="view-achievements" class="hidden view">
           <h1><i class="fas fa-trophy"></i> Achievements</h1>
           <div class="card">
             <div class="row" style="margin-bottom:12px;">
@@ -222,7 +222,7 @@
         </section>
 
         <!-- FRIENDS -->
-        <section id="view-friends" class="hidden">
+        <section id="view-friends" class="hidden view">
           <h1><i class="fas fa-users"></i> Friends</h1>
           <div class="card">
             <h3><i class="fas fa-user-plus"></i> Add a Friend</h3>
@@ -246,7 +246,7 @@
         </section>
 
         <!-- FRIEND DETAIL -->
-        <section id="view-friend-detail" class="hidden">
+        <section id="view-friend-detail" class="hidden view">
           <button class="btn-ghost" onclick="showView('friends')"><i class="fas fa-arrow-left"></i> Back</button>
           <div class="card" style="margin-top:12px;">
             <div style="display:flex; gap:20px; align-items:center; flex-wrap:wrap;">
@@ -274,7 +274,7 @@
         </section>
 
         <!-- CHAT -->
-        <section id="view-chat" class="hidden">
+        <section id="view-chat" class="hidden view">
           <button class="btn-ghost" onclick="showView('friend-detail')"><i class="fas fa-arrow-left"></i> Back</button>
           <div class="card" style="margin-top:12px; display:flex; flex-direction:column; height: calc(100vh - 220px);">
             <div style="display:flex; align-items:center; gap:12px; padding-bottom:12px; border-bottom:1px solid var(--border);">
@@ -293,7 +293,7 @@
         </section>
 
         <!-- SETTINGS -->
-        <section id="view-settings" class="hidden">
+        <section id="view-settings" class="hidden view">
           <h1><i class="fas fa-gear"></i> Settings</h1>
 
           <div class="card" style="text-align:center;">
@@ -422,7 +422,7 @@
     </div>
   </div>
 
-  <!-- ABOUT MODAL (like My Life Journal) -->
+  <!-- ABOUT MODAL -->
   <div class="modal-backdrop" id="aboutBackdrop">
     <div class="modal" style="max-width:640px;">
       <div class="modal-head">
