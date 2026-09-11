@@ -179,9 +179,9 @@ async function resetForgotPassword() {
     } catch (e) { toast("danger", "Error", e.message); }
 }
 
-// ==================== CREATOR MODAL ====================
-function openCreator() { $("creatorBackdrop").style.display = "flex"; }
-function closeCreator() { $("creatorBackdrop").style.display = "none"; }
+// ==================== ABOUT MODAL ====================
+function openAbout() { $("aboutBackdrop").style.display = "flex"; }
+function closeAbout() { $("aboutBackdrop").style.display = "none"; }
 
 // ==================== INIT APP ====================
 async function initApp() {
