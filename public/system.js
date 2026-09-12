@@ -1,8 +1,5 @@
 /* ============================================================
-   STUDENT PORTFOLIO — Batches 1-4 Complete
-   Includes: notifications, comments, read receipts, typing,
-   search, stats, admin panel, activity log, albums,
-   private notes, public profile, PDF export
+   STUDENT PORTFOLIO — All 15 Design Upgrades
    ============================================================ */
 
 const API_URL = '';
@@ -26,6 +23,18 @@ let lastTypingSent = 0;
 let searchTimeout = null;
 const VIEW_ORDER = ["profile", "posts", "albums", "achievements", "friends", "stats", "activity", "settings", "friend-detail", "chat"];
 
+// Banner presets
+const BANNERS = [
+    "linear-gradient(135deg, #6366f1, #8b5cf6)",
+    "linear-gradient(135deg, #0ea5e9, #38bdf8)",
+    "linear-gradient(135deg, #ec4899, #f472b6)",
+    "linear-gradient(135deg, #10b981, #22c55e)",
+    "linear-gradient(135deg, #f59e0b, #fbbf24)",
+    "linear-gradient(135deg, #1e1b4b, #6366f1)",
+    "linear-gradient(135deg, #7c3aed, #ec4899)",
+    "linear-gradient(135deg, #0f766e, #14b8a6)"
+];
+
 // ==================== HELPERS ====================
 function $(id) { return document.getElementById(id); }
 function escapeHtml(str) {
@@ -45,14 +54,53 @@ function toast(type, title, msg) {
     const wrap = $("toastWrap");
     const el = document.createElement("div");
     el.className = "toast" + (type ? " " + type : "");
-    el.innerHTML = `<i class="fas ${type==="danger"?"fa-triangle-exclamation":type==="warn"?"fa-circle-exclamation":"fa-circle-check"}"></i>
+    const iconClass = type === "danger" ? "fa-triangle-exclamation" : type === "warn" ? "fa-circle-exclamation" : "fa-circle-check";
+    el.innerHTML = `<i class="fas ${iconClass} t-icon"></i>
         <div><div class="t-title">${escapeHtml(title)}</div><div class="t-msg">${escapeHtml(msg)}</div></div>
         <button class="x" onclick="this.parentElement.remove()">✕</button>`;
     wrap.appendChild(el);
     setTimeout(() => el.remove(), 4500);
 }
 
-// ==================== SKELETONS / EMPTY ====================
+// ============ RIPPLE EFFECT ON BUTTONS (#7) ============
+document.addEventListener("click", (e) => {
+    const target = e.target.closest(".btn, .btn-inline, .btn-ghost, .pillbtn");
+    if (!target) return;
+    const rect = target.getBoundingClientRect();
+    const size = Math.max(rect.width, rect.height);
+    const ripple = document.createElement("span");
+    ripple.className = "ripple";
+    ripple.style.width = ripple.style.height = size + "px";
+    ripple.style.left = (e.clientX - rect.left - size / 2) + "px";
+    ripple.style.top = (e.clientY - rect.top - size / 2) + "px";
+    target.appendChild(ripple);
+    setTimeout(() => ripple.remove(), 700);
+});
+
+// ============ BANNER (#5) ============
+function applyBanner() {
+    const idx = parseInt(localStorage.getItem("sp_banner") || "0", 10);
+    const gradient = BANNERS[idx] || BANNERS[0];
+    document.documentElement.style.setProperty('--banner', gradient);
+    document.querySelectorAll('.banner-swatch').forEach((s, i) => {
+        s.classList.toggle('active', i === idx);
+    });
+}
+function renderBannerPicker() {
+    const picker = $("bannerColorPicker");
+    if (!picker) return;
+    picker.innerHTML = BANNERS.map((g, i) =>
+        `<div class="banner-swatch" style="background:${g}" data-idx="${i}" onclick="setBanner(${i})"></div>`
+    ).join("");
+    applyBanner();
+}
+function setBanner(idx) {
+    localStorage.setItem("sp_banner", String(idx));
+    applyBanner();
+    toast("success", "Banner updated", "Your profile banner changed.");
+}
+
+// ============ SKELETONS ============
 function skeletonList(count = 2) {
     let html = '';
     for (let i = 0; i < count; i++) {
@@ -67,16 +115,33 @@ function skeletonList(count = 2) {
 function skeletonFriends(count = 3) {
     let html = '';
     for (let i = 0; i < count; i++) {
-        html += `<div class="skeleton-card" style="display:flex; gap:12px; align-items:center;">
+        html += `<div class="skel-friend">
             <div class="skeleton skeleton-avatar"></div>
-            <div style="flex:1;">
-                <div class="skeleton skeleton-line short"></div>
-                <div class="skeleton skeleton-line medium"></div>
+            <div class="lines">
+                <div class="skeleton line w60"></div>
+                <div class="skeleton line w40"></div>
             </div>
         </div>`;
     }
     return html;
 }
+function skeletonPosts(count = 2) {
+    let html = '';
+    for (let i = 0; i < count; i++) {
+        html += `<div class="skel-post">
+            <div class="head">
+                <div class="skeleton skeleton-avatar"></div>
+                <div class="lines">
+                    <div class="skeleton line w40"></div>
+                    <div class="skeleton line w25"></div>
+                </div>
+            </div>
+            <div class="skeleton skeleton-image"></div>
+        </div>`;
+    }
+    return html;
+}
+
 function emptyState(icon, title, text, actionHtml = "") {
     return `<div class="empty">
         <div class="empty-illustration"><i class="fas ${icon}"></i></div>
@@ -91,7 +156,22 @@ function categoryIcon(cat) {
 }
 function categoryClass(cat) { return "ach-cat-" + (cat || "other").toLowerCase(); }
 
-// ==================== PROFILE COMPLETION ====================
+// ============ COUNTER ANIMATION (#12) ============
+function animateCount(el, target, duration = 800) {
+    if (!el) return;
+    const start = 0;
+    const t0 = performance.now();
+    function step(now) {
+        const t = Math.min(1, (now - t0) / duration);
+        const eased = 1 - Math.pow(1 - t, 3);
+        el.innerText = Math.round(start + (target - start) * eased);
+        if (t < 1) requestAnimationFrame(step);
+        else el.innerText = target;
+    }
+    requestAnimationFrame(step);
+}
+
+// ============ PROFILE COMPLETION ============
 function computeCompletion(p, photo) {
     const fields = [
         { label: "Full name", value: p.fullName }, { label: "Course", value: p.course },
@@ -161,7 +241,7 @@ async function renderPreviewCard() {
 }
 function screenshotHint() { toast("info", "Tip", "Take a screenshot to share your card!"); }
 
-// ==================== PDF EXPORT ====================
+// ============ PDF EXPORT ============
 async function exportProfilePDF() {
     try {
         const data = await apiCall('/api/achievements');
@@ -186,7 +266,7 @@ async function exportProfilePDF() {
     } catch (e) { toast("danger", "Error", e.message); }
 }
 
-// ==================== PUBLIC LINK ====================
+// ============ PUBLIC LINK ============
 function copyPublicLink() {
     if (!currentUser?.username) {
         toast("warn", "No username", "Set a username in Settings first.");
@@ -200,7 +280,23 @@ function copyPublicLink() {
     });
 }
 
-// ==================== PASSWORD STRENGTH ====================
+// ============ QR CODE (#new feature L) ============
+function openQRModal() {
+    if (!currentUser?.username) {
+        toast("warn", "No username", "Set a username in Settings first.");
+        return;
+    }
+    const url = `${location.origin}/u/${currentUser.username}`;
+    const qrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(url)}`;
+    if ($("qrImage")) $("qrImage").src = qrSrc;
+    if ($("qrUrl")) $("qrUrl").innerText = url;
+    if ($("qrBackdrop")) $("qrBackdrop").style.display = "flex";
+}
+function closeQRModal() {
+    if ($("qrBackdrop")) $("qrBackdrop").style.display = "none";
+}
+
+// ============ PASSWORD STRENGTH ============
 function updatePasswordStrength(pw) {
     const bar = $("pwBar");
     const label = $("pwLabel");
@@ -222,7 +318,7 @@ function updatePasswordStrength(pw) {
     label.innerText = text; label.style.color = color;
 }
 
-// ==================== SESSION ====================
+// ============ SESSION ============
 function scheduleSessionWarning() {
     if (sessionWarnTimeout) clearTimeout(sessionWarnTimeout);
     if (!authToken) return;
@@ -238,7 +334,7 @@ function extendSession() {
     toast("success", "Extended", "You're still logged in.");
 }
 
-// ==================== PULL TO REFRESH ====================
+// ============ PULL TO REFRESH ============
 function setupPullToRefresh() {
     const main = $("mainScroll");
     const ind = $("pullIndicator");
@@ -281,7 +377,7 @@ function setupPullToRefresh() {
     });
 }
 
-// ==================== API ====================
+// ============ API ============
 async function apiCall(endpoint, options = {}) {
     const res = await fetch(API_URL + endpoint, {
         ...options,
@@ -296,7 +392,7 @@ async function apiCall(endpoint, options = {}) {
     return data;
 }
 
-// ==================== THEME ====================
+// ============ THEME ============
 function applyTheme(th) {
     document.documentElement.setAttribute("data-theme", th);
     localStorage.setItem("sp_theme", th);
@@ -310,7 +406,7 @@ function toggleTheme() {
     applyTheme(s || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"));
 })();
 
-// ==================== CAPTCHA ====================
+// ============ CAPTCHA ============
 function generateCaptcha() {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     let result = '';
@@ -330,7 +426,7 @@ function verifyCaptcha() {
     return true;
 }
 
-// ==================== AUTH ====================
+// ============ AUTH ============
 function toggleMode(mode) {
     authMode = mode;
     $("tabLogin").classList.toggle("active", mode === "login");
@@ -365,7 +461,7 @@ function logout() {
     location.reload();
 }
 
-// ==================== FORGOT PASSWORD ====================
+// ============ FORGOT PASSWORD ============
 function showForgot() {
     $("loginFormContainer").style.display = "none";
     $("forgotContainer").style.display = "block";
@@ -410,11 +506,11 @@ async function resetForgotPassword() {
     } catch (e) { toast("danger", "Error", e.message); }
 }
 
-// ==================== ABOUT ====================
+// ============ ABOUT ============
 function openAbout() { $("aboutBackdrop").style.display = "flex"; }
 function closeAbout() { $("aboutBackdrop").style.display = "none"; }
 
-// ==================== NOTIFICATIONS ====================
+// ============ NOTIFICATIONS ============
 function toggleNotifPanel(event) {
     if (event) event.stopPropagation();
     const panel = $("notifPanel");
@@ -477,15 +573,20 @@ async function refreshNotifBadge() {
     try {
         const data = await apiCall('/api/notifications/unread/count');
         const badge = $("notifBadge");
+        const icon = $("notifIcon");
         if (!badge) return;
         if (data.count > 0) {
             badge.classList.remove("hidden");
             badge.innerText = data.count > 9 ? "9+" : data.count;
-        } else badge.classList.add("hidden");
+            if (icon) icon.classList.add("wobble");
+        } else {
+            badge.classList.add("hidden");
+            if (icon) icon.classList.remove("wobble");
+        }
     } catch {}
 }
 
-// ==================== SEARCH ====================
+// ============ SEARCH ============
 function onSearchInput() {
     if (searchTimeout) clearTimeout(searchTimeout);
     searchTimeout = setTimeout(doSearch, 300);
@@ -561,9 +662,7 @@ function searchGoFriend(id, username) {
     $("globalSearch").value = "";
     viewFriendProfile(id).catch(() => {
         if (username) {
-            if (confirm("Not your friend. Open their public profile?")) {
-                window.open(`/u/${username}`, "_blank");
-            }
+            if (confirm("Not your friend. Open their public profile?")) window.open(`/u/${username}`, "_blank");
         } else {
             toast("info", "Not a friend", "Send them a friend request to see their profile.");
         }
@@ -581,18 +680,18 @@ function searchGoAch() {
     showView("achievements");
 }
 
-// ==================== STATS ====================
+// ============ STATS ============
 async function loadStats() {
     try {
         const data = await apiCall('/api/stats');
         const s = data.stats;
-        if ($("kpiPosts")) $("kpiPosts").innerText = s.posts;
-        if ($("kpiAch")) $("kpiAch").innerText = s.achievements;
-        if ($("kpiFriends")) $("kpiFriends").innerText = s.friends;
-        if ($("kpiLikes")) $("kpiLikes").innerText = s.likesReceived;
-        if ($("kpiComments")) $("kpiComments").innerText = s.commentsReceived;
-        if ($("kpiMsgsSent")) $("kpiMsgsSent").innerText = s.messagesSent;
-        if ($("kpiMsgsRecv")) $("kpiMsgsRecv").innerText = s.messagesReceived;
+        animateCount($("kpiPosts"), s.posts || 0);
+        animateCount($("kpiAch"), s.achievements || 0);
+        animateCount($("kpiFriends"), s.friends || 0);
+        animateCount($("kpiLikes"), s.likesReceived || 0);
+        animateCount($("kpiComments"), s.commentsReceived || 0);
+        animateCount($("kpiMsgsSent"), s.messagesSent || 0);
+        animateCount($("kpiMsgsRecv"), s.messagesReceived || 0);
         drawPostsChart(s.postsByMonth || []);
     } catch (e) { console.error("Stats error:", e); }
 }
@@ -656,21 +755,14 @@ function drawPostsChart(months) {
     });
 }
 
-// ==================== ADMIN STATS ====================
+// ============ ADMIN STATS ============
 async function loadAdminStats() {
     const container = document.querySelector("#view-stats");
     if (!container) return;
-
     const oldCard = document.getElementById("adminStatsCard");
     if (oldCard) oldCard.remove();
-
     if (!currentUser?.isAdmin) return;
-
-    try {
-        await apiCall('/api/admin/stats');
-    } catch {
-        return;
-    }
+    try { await apiCall('/api/admin/stats'); } catch { return; }
 
     const card = document.createElement("div");
     card.className = "card";
@@ -684,9 +776,7 @@ async function loadAdminStats() {
                 <i class="fas fa-lock"></i> Restricted
             </span>
         </h3>
-        <p class="muted" style="font-size:.85rem; margin-bottom:12px;">
-            Only visible to administrators.
-        </p>
+        <p class="muted" style="font-size:.85rem; margin-bottom:12px;">Only visible to administrators.</p>
         <div class="kpi-grid">
             <div class="kpi-tile"><i class="fas fa-user-group"></i><div class="kpi-num" id="adminUsers">0</div><div class="kpi-lbl">Total users</div></div>
             <div class="kpi-tile"><i class="fas fa-images"></i><div class="kpi-num" id="adminPosts">0</div><div class="kpi-lbl">Total posts</div></div>
@@ -703,18 +793,18 @@ async function loadAdminStats() {
     try {
         const data = await apiCall('/api/admin/stats');
         const s = data.stats;
-        if ($("adminUsers")) $("adminUsers").innerText = s.users;
-        if ($("adminPosts")) $("adminPosts").innerText = s.posts;
-        if ($("adminMsgs")) $("adminMsgs").innerText = s.messages;
-        if ($("adminAch")) $("adminAch").innerText = s.achievements;
-        if ($("adminCmts")) $("adminCmts").innerText = s.comments;
-        if ($("adminNotifs")) $("adminNotifs").innerText = s.notifications;
-        if ($("adminOnline")) $("adminOnline").innerText = s.online;
-        if ($("adminUptime")) $("adminUptime").innerText = Math.floor(s.uptimeSeconds / 3600);
+        animateCount($("adminUsers"), s.users || 0);
+        animateCount($("adminPosts"), s.posts || 0);
+        animateCount($("adminMsgs"), s.messages || 0);
+        animateCount($("adminAch"), s.achievements || 0);
+        animateCount($("adminCmts"), s.comments || 0);
+        animateCount($("adminNotifs"), s.notifications || 0);
+        animateCount($("adminOnline"), s.online || 0);
+        animateCount($("adminUptime"), Math.floor(s.uptimeSeconds / 3600));
     } catch {}
 }
 
-// ==================== ACTIVITY ====================
+// ============ ACTIVITY ============
 async function loadActivity() {
     const c = $("activityList");
     c.innerHTML = skeletonList(3);
@@ -749,12 +839,14 @@ async function loadActivity() {
     }
 }
 
-// ==================== INIT ====================
+// ============ INIT ============
 async function initApp() {
     $("authSection").style.display = "none";
     $("publicProfileSection").style.display = "none";
     $("app").style.display = "block";
     hydrateTopBar();
+    applyBanner();
+    renderBannerPicker();
     showView("profile");
     startHeartbeat();
     checkUnreadCount();
@@ -783,7 +875,7 @@ function hydrateTopBar() {
     }
 }
 
-// ==================== NAVIGATION ====================
+// ============ NAVIGATION ============
 function showView(v) {
     const currentIdx = VIEW_ORDER.findIndex(id => {
         const el = $("view-" + id);
@@ -818,7 +910,7 @@ function showView(v) {
     if (v === "friends") { loadFriends(); loadRequests(); }
     if (v === "stats") { loadStats(); loadAdminStats(); }
     if (v === "activity") loadActivity();
-    if (v === "settings") { updateStatusUI(); loadSettingsProfile(); }
+    if (v === "settings") { updateStatusUI(); loadSettingsProfile(); renderBannerPicker(); }
     if (v !== "chat") {
         if (chatPollInterval) { clearInterval(chatPollInterval); chatPollInterval = null; }
         if (typingPollInterval) { clearInterval(typingPollInterval); typingPollInterval = null; }
@@ -833,7 +925,7 @@ function closeDrawer() {
     $("drawerBackdrop").classList.remove("show");
 }
 
-// ==================== PROFILE ====================
+// ============ PROFILE ============
 async function loadProfile() {
     try {
         const data = await apiCall('/api/portfolio');
@@ -923,7 +1015,7 @@ async function changeUsername() {
     } catch (e) { toast("danger", "Error", e.message); }
 }
 
-// ==================== ACHIEVEMENTS ====================
+// ============ ACHIEVEMENTS ============
 async function loadAchievements() {
     const c = $("achievementsList");
     c.innerHTML = skeletonList(2);
@@ -1017,7 +1109,7 @@ async function deleteAchievement(id) {
     loadAchievements();
 }
 
-// ==================== ALBUMS ====================
+// ============ ALBUMS ============
 async function loadAlbums() {
     const c = $("albumsGrid");
     c.innerHTML = skeletonList(3);
@@ -1134,6 +1226,7 @@ async function openAlbumDetail(id, name) {
         c.innerHTML = photos.map(p => `
             <div class="photo-tile" onclick="openAlbumPhoto('${p.image}','${escapeHtml(p.caption || "")}')">
                 <img src="${p.image}">
+                <div class="like-overlay"><i class="fas fa-heart"></i></div>
                 ${p.caption ? `<div class="overlay">${escapeHtml(p.caption)}</div>` : ""}
             </div>
         `).join("");
@@ -1152,7 +1245,7 @@ function openAlbumPhoto(img, caption) {
     $("postViewerBackdrop").style.display = "flex";
 }
 
-// ==================== POSTS ====================
+// ============ POSTS ============
 function previewPostImage(e) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -1189,13 +1282,15 @@ async function createPost() {
 }
 function switchPostsTab(tab) {
     postsTab = tab;
+    const seg = document.querySelector(".segmented");
+    if (seg) seg.classList.toggle("right", tab === "mine");
     $("tabFeed").classList.toggle("active", tab === "feed");
     $("tabMine").classList.toggle("active", tab === "mine");
     loadPosts();
 }
 async function loadPosts() {
     const c = $("postsContainer");
-    c.innerHTML = skeletonList(2);
+    c.innerHTML = skeletonPosts(2);
     try {
         const endpoint = postsTab === "feed" ? '/api/posts/feed' : '/api/posts/mine';
         const data = await apiCall(endpoint);
@@ -1319,7 +1414,7 @@ async function openPostViewer(id) {
 }
 function closePostViewer() { $("postViewerBackdrop").style.display = "none"; }
 
-// ==================== FRIENDS ====================
+// ============ FRIENDS ============
 async function addFriendAction() {
     const email = $("friendEmail").value.trim().toLowerCase();
     if (!email) return toast("warn", "Missing", "Enter an email.");
@@ -1436,6 +1531,7 @@ async function viewFriendProfile(id) {
             : posts.map(x => `
                 <div class="photo-tile" onclick="openFriendPhoto('${x.image}','${escapeHtml(x.caption || "")}')">
                     <img src="${x.image}">
+                    <div class="like-overlay"><i class="fas fa-heart"></i> ${x.likes || 0}</div>
                     ${x.caption ? `<div class="overlay">${escapeHtml(x.caption)}</div>` : ""}
                 </div>`).join("");
         const ach = data.achievements || [];
@@ -1457,7 +1553,7 @@ function openFriendPhoto(img, caption) {
     $("postViewerBackdrop").style.display = "flex";
 }
 
-// ==================== CHAT ====================
+// ============ CHAT ============
 function openChat() {
     if (!activeFriendId) return;
     showView("chat");
@@ -1544,7 +1640,7 @@ async function checkUnreadCount() {
     } catch {}
 }
 
-// ==================== STATUS ====================
+// ============ STATUS ============
 function updateStatusUI() {
     if (!currentUser) return;
     const isOnline = currentUser.onlineStatus === "online";
@@ -1581,7 +1677,7 @@ window.addEventListener("beforeunload", () => {
         new Blob([JSON.stringify({ status: "offline", token: authToken })], { type: "application/json" }));
 });
 
-// ==================== SETTINGS ====================
+// ============ SETTINGS ============
 async function uploadPhoto(e) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -1618,7 +1714,7 @@ async function wipeMyData() {
     logout();
 }
 
-// ==================== PUBLIC PROFILE ====================
+// ============ PUBLIC PROFILE ============
 async function loadPublicProfile() {
     $("authSection").style.display = "none";
     $("app").style.display = "none";
@@ -1694,13 +1790,14 @@ async function loadPublicProfile() {
     }
 }
 
-// ==================== INIT ====================
+// ============ INIT ============
 document.addEventListener("DOMContentLoaded", () => {
     if (location.pathname.startsWith("/u/")) {
         loadPublicProfile();
         return;
     }
 
+    applyBanner();
     generateCaptcha();
     const stored = localStorage.getItem('sp_user');
     if (authToken && stored) {
