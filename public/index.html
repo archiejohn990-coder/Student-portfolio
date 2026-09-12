@@ -123,6 +123,24 @@
           <div style="flex:1;"></div>
           <button class="btn-ghost" onclick="toggleTheme()"><i class="fas fa-circle-half-stroke"></i></button>
           <button class="btn-ghost" onclick="openAbout()"><i class="fas fa-circle-info"></i> About</button>
+
+          <!-- 🔔 Notifications bell -->
+          <div class="notif-wrap">
+            <button class="btn-ghost notif-btn" id="notifBtn" onclick="toggleNotifPanel(event)" title="Notifications">
+              <i class="fas fa-bell"></i>
+              <span class="notif-badge hidden" id="notifBadge">0</span>
+            </button>
+            <div class="notif-panel" id="notifPanel">
+              <div class="notif-head">
+                <strong>Notifications</strong>
+                <button class="link" onclick="markAllNotifRead()" style="border:none; background:none;">Mark all read</button>
+              </div>
+              <div class="notif-list" id="notifList">
+                <p class="muted" style="text-align:center; padding:16px;">Loading...</p>
+              </div>
+            </div>
+          </div>
+
           <div class="pill">
             <img id="topAvatar" src="https://ui-avatars.com/api/?background=6366f1&color=fff&name=S" alt="avatar">
             <div>
@@ -132,10 +150,8 @@
           </div>
         </div>
 
-        <!-- Profile completion bar (injected) -->
         <div id="completionBarWrap"></div>
 
-        <!-- Pull to refresh indicator -->
         <div id="pullIndicator" class="pull-indicator">
           <i class="fas fa-arrow-down"></i>
           <span>Pull to refresh</span>
@@ -306,14 +322,17 @@
           <div class="card" style="margin-top:12px; display:flex; flex-direction:column; height: calc(100vh - 220px);">
             <div style="display:flex; align-items:center; gap:12px; padding-bottom:12px; border-bottom:1px solid var(--border);">
               <img id="chatAvatar" style="width:44px; height:44px; border-radius:50%; object-fit:cover;" src="">
-              <div>
+              <div style="flex:1;">
                 <div style="font-weight:800;" id="chatName">Friend</div>
                 <div class="friend-status"><span id="chatStatusDot" class="status-dot offline"></span><span id="chatStatusText">Offline</span></div>
+              </div>
+              <div id="typingIndicator" class="typing-indicator hidden">
+                <span class="dot"></span><span class="dot"></span><span class="dot"></span>
               </div>
             </div>
             <div id="chatMessages" style="flex:1; overflow-y:auto; padding:14px 0; display:flex; flex-direction:column; gap:8px;"></div>
             <div style="display:flex; gap:8px; padding-top:12px; border-top:1px solid var(--border);">
-              <input id="chatInput" class="input" placeholder="Type a message..." onkeydown="if(event.key==='Enter')sendMessage()">
+              <input id="chatInput" class="input" placeholder="Type a message..." oninput="notifyTyping()" onkeydown="if(event.key==='Enter')sendMessage()">
               <button class="btn-inline" onclick="sendMessage()"><i class="fas fa-paper-plane"></i></button>
             </div>
           </div>
