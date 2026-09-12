@@ -70,6 +70,7 @@ const messageSchema = new mongoose.Schema({
     to: { type: mongoose.Schema.Types.ObjectId, ref: "Student", required: true },
     text: { type: String, required: true },
     read: { type: Boolean, default: false },
+    readAt: { type: Date, default: null },
     createdAt: { type: Date, default: Date.now }
 });
 
@@ -82,11 +83,30 @@ const postSchema = new mongoose.Schema({
     createdAt: { type: Date, default: Date.now }
 });
 
+const commentSchema = new mongoose.Schema({
+    postId: { type: mongoose.Schema.Types.ObjectId, ref: "Post", required: true },
+    studentId: { type: mongoose.Schema.Types.ObjectId, ref: "Student", required: true },
+    text: { type: String, required: true },
+    createdAt: { type: Date, default: Date.now }
+});
+
+const notificationSchema = new mongoose.Schema({
+    toUser: { type: mongoose.Schema.Types.ObjectId, ref: "Student", required: true },
+    fromUser: { type: mongoose.Schema.Types.ObjectId, ref: "Student", required: true },
+    type: { type: String, required: true },
+    postId: { type: mongoose.Schema.Types.ObjectId, ref: "Post", default: null },
+    text: { type: String, default: "" },
+    read: { type: Boolean, default: false },
+    createdAt: { type: Date, default: Date.now }
+});
+
 const Student = mongoose.model("Student", studentSchema);
 const Portfolio = mongoose.model("Portfolio", portfolioSchema);
 const Achievement = mongoose.model("Achievement", achievementSchema);
 const Message = mongoose.model("Message", messageSchema);
 const Post = mongoose.model("Post", postSchema);
+const Comment = mongoose.model("Comment", commentSchema);
+const Notification = mongoose.model("Notification", notificationSchema);
 
 // ==================== AUTH ====================
 const authenticateToken = async (req, res, next) => {
@@ -107,6 +127,13 @@ const ONLINE_THRESHOLD_MS = 60 * 1000;
 function computeOnlineStatus(s) {
     if (!s || !s.lastSeen) return 'offline';
     return (Date.now() - new Date(s.lastSeen).getTime()) < ONLINE_THRESHOLD_MS ? 'online' : 'offline';
+}
+
+async function createNotification({ toUser, fromUser, type, postId = null, text = "" }) {
+    try {
+        if (toUser.toString() === fromUser.toString()) return;
+        await Notification.create({ toUser, fromUser, type, postId, text });
+    } catch (e) { console.error("Notification error:", e.message); }
 }
 
 // ==================== AUTH ROUTES ====================
@@ -143,7 +170,7 @@ app.post("/api/login", async (req, res) => {
 });
 
 // ==================== FORGOT PASSWORD ====================
-const otpStore = new Map(); // email -> { otp, expiresAt }
+const otpStore = new Map();
 
 app.post("/api/forgot/send", async (req, res) => {
     try {
@@ -151,16 +178,10 @@ app.post("/api/forgot/send", async (req, res) => {
         if (!email) return res.status(400).json({ error: "Email required" });
         const s = await Student.findOne({ email });
         if (!s) return res.status(404).json({ error: "No account found with this email" });
-
         const otp = Math.floor(100000 + Math.random() * 900000).toString();
         otpStore.set(email, { otp, expiresAt: Date.now() + 10 * 60 * 1000 });
         console.log(`📧 OTP for ${email}: ${otp}`);
-
-        res.json({
-            success: true,
-            message: "OTP generated",
-            demoOtp: otp // demo mode — in production send this via email
-        });
+        res.json({ success: true, message: "OTP generated", demoOtp: otp });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -169,19 +190,15 @@ app.post("/api/forgot/reset", async (req, res) => {
         const { email, otp, newPassword } = req.body;
         if (!email || !otp || !newPassword) return res.status(400).json({ error: "All fields required" });
         if (newPassword.length < 6) return res.status(400).json({ error: "Password must be 6+ characters" });
-
         const entry = otpStore.get(email);
         if (!entry) return res.status(400).json({ error: "No OTP requested" });
         if (Date.now() > entry.expiresAt) { otpStore.delete(email); return res.status(400).json({ error: "OTP expired" }); }
         if (entry.otp !== otp) return res.status(400).json({ error: "Invalid OTP" });
-
         const s = await Student.findOne({ email });
         if (!s) return res.status(404).json({ error: "User not found" });
-
         s.passwordHash = await bcrypt.hash(newPassword, 10);
         await s.save();
         otpStore.delete(email);
-
         res.json({ success: true, message: "Password reset successfully" });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -259,45 +276,52 @@ app.delete("/api/achievements/:id", authenticateToken, async (req, res) => {
 });
 
 // ==================== POSTS ====================
-app.get("/api/posts/feed", authenticateToken, async (req, res) => {
-    try {
-        const me = await Student.findById(req.studentId);
-        const ids = [...me.friends, me._id];
-        const posts = await Post.find({
-            studentId: { $in: ids },
-            $or: [{ visibility: "friends" }, { studentId: me._id }]
-        })
+async function fetchPostsForUser(userId, filter) {
+    const me = await Student.findById(userId);
+    const ids = filter === "feed" ? [...me.friends, me._id] : [me._id];
+    const query = filter === "feed"
+        ? { studentId: { $in: ids }, $or: [{ visibility: "friends" }, { studentId: me._id }] }
+        : { studentId: me._id };
+    const posts = await Post.find(query)
         .populate("studentId", "fullName photo")
         .sort({ createdAt: -1 })
         .limit(100);
-        res.json({
-            success: true,
-            posts: posts.map(p => ({
-                id: p._id, caption: p.caption, image: p.image,
-                visibility: p.visibility, createdAt: p.createdAt,
-                likes: p.likes.length,
-                likedByMe: p.likes.map(l => l.toString()).includes(req.studentId),
-                author: { id: p.studentId._id, name: p.studentId.fullName, photo: p.studentId.photo }
-            }))
+
+    const postIds = posts.map(p => p._id);
+    const comments = await Comment.find({ postId: { $in: postIds } })
+        .populate("studentId", "fullName photo")
+        .sort({ createdAt: 1 });
+    const commentsByPost = {};
+    comments.forEach(c => {
+        const key = c.postId.toString();
+        if (!commentsByPost[key]) commentsByPost[key] = [];
+        commentsByPost[key].push({
+            id: c._id, text: c.text, createdAt: c.createdAt,
+            author: { id: c.studentId._id, name: c.studentId.fullName, photo: c.studentId.photo }
         });
+    });
+
+    return posts.map(p => ({
+        id: p._id, caption: p.caption, image: p.image,
+        visibility: p.visibility, createdAt: p.createdAt,
+        likes: p.likes.length,
+        likedByMe: p.likes.map(l => l.toString()).includes(userId),
+        author: { id: p.studentId._id, name: p.studentId.fullName, photo: p.studentId.photo },
+        comments: commentsByPost[p._id.toString()] || []
+    }));
+}
+
+app.get("/api/posts/feed", authenticateToken, async (req, res) => {
+    try {
+        const posts = await fetchPostsForUser(req.studentId, "feed");
+        res.json({ success: true, posts });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 app.get("/api/posts/mine", authenticateToken, async (req, res) => {
     try {
-        const posts = await Post.find({ studentId: req.studentId })
-            .populate("studentId", "fullName photo")
-            .sort({ createdAt: -1 });
-        res.json({
-            success: true,
-            posts: posts.map(p => ({
-                id: p._id, caption: p.caption, image: p.image,
-                visibility: p.visibility, createdAt: p.createdAt,
-                likes: p.likes.length,
-                likedByMe: p.likes.map(l => l.toString()).includes(req.studentId),
-                author: { id: p.studentId._id, name: p.studentId.fullName, photo: p.studentId.photo }
-            }))
-        });
+        const posts = await fetchPostsForUser(req.studentId, "mine");
+        res.json({ success: true, posts });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -317,6 +341,7 @@ app.post("/api/posts", authenticateToken, async (req, res) => {
 app.delete("/api/posts/:id", authenticateToken, async (req, res) => {
     try {
         await Post.findOneAndDelete({ _id: req.params.id, studentId: req.studentId });
+        await Comment.deleteMany({ postId: req.params.id });
         res.json({ success: true });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -326,10 +351,116 @@ app.post("/api/posts/:id/like", authenticateToken, async (req, res) => {
         const post = await Post.findById(req.params.id);
         if (!post) return res.status(404).json({ error: "Not found" });
         const already = post.likes.map(l => l.toString()).includes(req.studentId);
-        if (already) post.likes = post.likes.filter(l => l.toString() !== req.studentId);
-        else post.likes.push(req.studentId);
+        if (already) {
+            post.likes = post.likes.filter(l => l.toString() !== req.studentId);
+        } else {
+            post.likes.push(req.studentId);
+            await createNotification({
+                toUser: post.studentId,
+                fromUser: req.studentId,
+                type: "like",
+                postId: post._id
+            });
+        }
         await post.save();
         res.json({ success: true, likes: post.likes.length, likedByMe: !already });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ==================== COMMENTS ====================
+app.get("/api/posts/:id/comments", authenticateToken, async (req, res) => {
+    try {
+        const comments = await Comment.find({ postId: req.params.id })
+            .populate("studentId", "fullName photo")
+            .sort({ createdAt: 1 });
+        res.json({
+            success: true,
+            comments: comments.map(c => ({
+                id: c._id, text: c.text, createdAt: c.createdAt,
+                author: { id: c.studentId._id, name: c.studentId.fullName, photo: c.studentId.photo }
+            }))
+        });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post("/api/posts/:id/comments", authenticateToken, async (req, res) => {
+    try {
+        const { text } = req.body;
+        if (!text || !text.trim()) return res.status(400).json({ error: "Empty comment" });
+        const post = await Post.findById(req.params.id);
+        if (!post) return res.status(404).json({ error: "Post not found" });
+        const comment = await Comment.create({
+            postId: post._id,
+            studentId: req.studentId,
+            text: text.trim().slice(0, 500)
+        });
+        await createNotification({
+            toUser: post.studentId,
+            fromUser: req.studentId,
+            type: "comment",
+            postId: post._id,
+            text: text.trim().slice(0, 80)
+        });
+        const populated = await Comment.findById(comment._id).populate("studentId", "fullName photo");
+        res.json({
+            success: true,
+            comment: {
+                id: populated._id, text: populated.text, createdAt: populated.createdAt,
+                author: { id: populated.studentId._id, name: populated.studentId.fullName, photo: populated.studentId.photo }
+            }
+        });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.delete("/api/comments/:id", authenticateToken, async (req, res) => {
+    try {
+        const c = await Comment.findById(req.params.id);
+        if (!c) return res.status(404).json({ error: "Not found" });
+        if (c.studentId.toString() !== req.studentId) return res.status(403).json({ error: "Not yours" });
+        await c.deleteOne();
+        res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ==================== NOTIFICATIONS ====================
+app.get("/api/notifications", authenticateToken, async (req, res) => {
+    try {
+        const list = await Notification.find({ toUser: req.studentId })
+            .populate("fromUser", "fullName photo")
+            .populate("postId", "image")
+            .sort({ createdAt: -1 })
+            .limit(50);
+        res.json({
+            success: true,
+            notifications: list.map(n => ({
+                id: n._id, type: n.type, text: n.text, read: n.read,
+                createdAt: n.createdAt,
+                postImage: n.postId?.image || null,
+                postId: n.postId?._id || null,
+                from: { id: n.fromUser._id, name: n.fromUser.fullName, photo: n.fromUser.photo }
+            }))
+        });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.get("/api/notifications/unread/count", authenticateToken, async (req, res) => {
+    try {
+        const count = await Notification.countDocuments({ toUser: req.studentId, read: false });
+        res.json({ success: true, count });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post("/api/notifications/read-all", authenticateToken, async (req, res) => {
+    try {
+        await Notification.updateMany({ toUser: req.studentId, read: false }, { read: true });
+        res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.delete("/api/notifications/:id", authenticateToken, async (req, res) => {
+    try {
+        await Notification.findOneAndDelete({ _id: req.params.id, toUser: req.studentId });
+        res.json({ success: true });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -345,6 +476,7 @@ app.post("/api/friends/request", authenticateToken, async (req, res) => {
         const existing = await Student.findOne({ _id: toUser._id, friendRequests: req.studentId });
         if (existing) return res.status(400).json({ error: "Request already sent" });
         await Student.findByIdAndUpdate(toUser._id, { $push: { friendRequests: req.studentId } });
+        await createNotification({ toUser: toUser._id, fromUser: req.studentId, type: "friend_request" });
         res.json({ success: true });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -367,6 +499,7 @@ app.post("/api/friends/accept", authenticateToken, async (req, res) => {
             $push: { friends: fromUserId }, $pull: { friendRequests: fromUserId }
         });
         await Student.findByIdAndUpdate(fromUserId, { $push: { friends: req.studentId } });
+        await createNotification({ toUser: fromUserId, fromUser: req.studentId, type: "friend_accept" });
         res.json({ success: true });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -434,7 +567,7 @@ app.get("/api/chat/:friendId", authenticateToken, async (req, res) => {
         }).sort({ createdAt: 1 }).limit(200);
         await Message.updateMany(
             { from: req.params.friendId, to: req.studentId, read: false },
-            { read: true }
+            { read: true, readAt: new Date() }
         );
         res.json({ success: true, messages: msgs });
     } catch (err) { res.status(500).json({ error: err.message }); }
@@ -448,7 +581,30 @@ app.post("/api/chat/:friendId", authenticateToken, async (req, res) => {
         if (!me.friends.map(f => f.toString()).includes(req.params.friendId))
             return res.status(403).json({ error: "Not your friend" });
         const msg = await Message.create({ from: req.studentId, to: req.params.friendId, text: text.trim() });
+        await createNotification({
+            toUser: req.params.friendId,
+            fromUser: req.studentId,
+            type: "message",
+            text: text.trim().slice(0, 60)
+        });
         res.json({ success: true, message: msg });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.get("/api/chat/:friendId/status", authenticateToken, async (req, res) => {
+    try {
+        const unread = await Message.countDocuments({
+            from: req.studentId, to: req.params.friendId, read: false
+        });
+        const lastRead = await Message.findOne({
+            from: req.studentId, to: req.params.friendId, read: true
+        }).sort({ readAt: -1 });
+        res.json({
+            success: true,
+            unreadByThem: unread,
+            lastReadAt: lastRead?.readAt || null,
+            lastMessageRead: lastRead?._id || null
+        });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -456,6 +612,26 @@ app.get("/api/chat/unread/count", authenticateToken, async (req, res) => {
     try {
         const count = await Message.countDocuments({ to: req.studentId, read: false });
         res.json({ success: true, count });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Typing indicator
+const typingStore = new Map();
+
+app.post("/api/chat/:friendId/typing", authenticateToken, async (req, res) => {
+    try {
+        const key = `${req.studentId}:${req.params.friendId}`;
+        typingStore.set(key, Date.now());
+        res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.get("/api/chat/:friendId/typing", authenticateToken, async (req, res) => {
+    try {
+        const key = `${req.params.friendId}:${req.studentId}`;
+        const t = typingStore.get(key);
+        const isTyping = t && (Date.now() - t) < 3000;
+        res.json({ success: true, typing: !!isTyping });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -504,6 +680,8 @@ app.delete("/api/user/delete", authenticateToken, async (req, res) => {
         await Achievement.deleteMany({ studentId: req.studentId });
         await Message.deleteMany({ $or: [{ from: req.studentId }, { to: req.studentId }] });
         await Post.deleteMany({ studentId: req.studentId });
+        await Comment.deleteMany({ studentId: req.studentId });
+        await Notification.deleteMany({ $or: [{ toUser: req.studentId }, { fromUser: req.studentId }] });
         await Student.updateMany({ friends: req.studentId }, { $pull: { friends: req.studentId } });
         await Student.updateMany({ friendRequests: req.studentId }, { $pull: { friendRequests: req.studentId } });
         await Student.findByIdAndDelete(req.studentId);
