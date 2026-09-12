@@ -1,8 +1,6 @@
 /* ============================================================
-   STUDENT PORTFOLIO — Batch 1
-   Includes: badge, completion bar, category icons, skeletons,
-   empty states, preview card, session warning, password meter,
-   pull to refresh, PWA
+   STUDENT PORTFOLIO — Batch 2 Complete
+   Notifications + Comments + Read Receipts + Typing
    ============================================================ */
 
 const API_URL = '';
@@ -13,10 +11,13 @@ let editingAchievementId = null;
 let heartbeatInterval = null;
 let activeFriendId = null;
 let chatPollInterval = null;
+let notifPollInterval = null;
+let typingPollInterval = null;
 let postsTab = 'feed';
 let captchaCode = "";
 let postImageB64 = null;
 let sessionWarnTimeout = null;
+let lastTypingSent = 0;
 const VIEW_ORDER = ["profile", "posts", "achievements", "friends", "settings", "friend-detail", "chat"];
 
 // ==================== HELPERS ====================
@@ -76,7 +77,6 @@ function skeletonFriends(count = 3) {
     return html;
 }
 
-// ==================== EMPTY STATES ====================
 function emptyState(icon, title, text, actionHtml = "") {
     return `
         <div class="empty">
@@ -88,7 +88,6 @@ function emptyState(icon, title, text, actionHtml = "") {
     `;
 }
 
-// ==================== ACHIEVEMENT CATEGORY ICONS ====================
 function categoryIcon(cat) {
     const map = {
         "Academic": "fa-graduation-cap",
@@ -152,10 +151,9 @@ async function renderCompletionBar() {
                 <div class="completion-tip">Missing: ${escapeHtml(missing.slice(0, 3).join(", "))}${missing.length > 3 ? "…" : ""}</div>
             </div>
         `;
-    } catch (e) { /* silent */ }
+    } catch (e) {}
 }
 
-// ==================== PREVIEW CARD ====================
 async function renderPreviewCard() {
     try {
         const data = await apiCall('/api/portfolio');
@@ -174,35 +172,31 @@ async function renderPreviewCard() {
             (p.skills || []).slice(0, 3).forEach(s => chips.push(`<span class="chip"><i class="fas fa-star"></i> ${escapeHtml(s)}</span>`));
             $("ppChips").innerHTML = chips.join("");
         }
-    } catch (e) { /* silent */ }
+    } catch (e) {}
 }
 
 function screenshotHint() {
-    toast("info", "Tip", "Take a screenshot to share your card on LinkedIn or résumé!");
+    toast("info", "Tip", "Take a screenshot to share your card!");
 }
 
 // ==================== PASSWORD STRENGTH ====================
 function updatePasswordStrength(pw) {
-    const meter = $("pwMeter");
     const bar = $("pwBar");
     const label = $("pwLabel");
-    if (!meter || !bar || !label) return;
+    if (!bar || !label) return;
     if (!pw) { bar.style.width = "0"; label.innerText = ""; return; }
-
     let score = 0;
     if (pw.length >= 6) score++;
     if (pw.length >= 10) score++;
     if (/[A-Z]/.test(pw)) score++;
     if (/[0-9]/.test(pw)) score++;
     if (/[^A-Za-z0-9]/.test(pw)) score++;
-
     let width = "0%", color = "var(--danger)", text = "Weak";
     if (score <= 1) { width = "25%"; color = "var(--danger)"; text = "Weak"; }
     else if (score === 2) { width = "50%"; color = "var(--warn)"; text = "Fair"; }
     else if (score === 3) { width = "70%"; color = "#84cc16"; text = "Good"; }
     else if (score === 4) { width = "85%"; color = "var(--success)"; text = "Strong"; }
     else { width = "100%"; color = "var(--success)"; text = "Very strong"; }
-
     bar.style.width = width;
     bar.style.background = color;
     label.innerText = text;
@@ -213,7 +207,6 @@ function updatePasswordStrength(pw) {
 function scheduleSessionWarning() {
     if (sessionWarnTimeout) clearTimeout(sessionWarnTimeout);
     if (!authToken) return;
-    // JWT is 7 days; warn at 6 days 23 hours
     const WARN_AT = 7 * 24 * 60 * 60 * 1000 - 60 * 60 * 1000;
     sessionWarnTimeout = setTimeout(() => {
         if ($("sessionWarnBackdrop")) $("sessionWarnBackdrop").style.display = "flex";
@@ -221,7 +214,6 @@ function scheduleSessionWarning() {
 }
 function extendSession() {
     if ($("sessionWarnBackdrop")) $("sessionWarnBackdrop").style.display = "none";
-    // In real app, call refresh endpoint. For now just re-schedule.
     scheduleSessionWarning();
     updateOnlineStatus(true);
     toast("success", "Extended", "You're still logged in.");
@@ -236,10 +228,7 @@ function setupPullToRefresh() {
     const THRESHOLD = 70;
 
     main.addEventListener("touchstart", (e) => {
-        if (main.scrollTop === 0) {
-            startY = e.touches[0].clientY;
-            pulling = true;
-        }
+        if (main.scrollTop === 0) { startY = e.touches[0].clientY; pulling = true; }
     }, { passive: true });
 
     main.addEventListener("touchmove", (e) => {
@@ -356,6 +345,8 @@ function logout() {
     if (!confirm("Log out?")) return;
     stopHeartbeat();
     if (chatPollInterval) clearInterval(chatPollInterval);
+    if (notifPollInterval) clearInterval(notifPollInterval);
+    if (typingPollInterval) clearInterval(typingPollInterval);
     if (sessionWarnTimeout) clearTimeout(sessionWarnTimeout);
     localStorage.removeItem('sp_token');
     localStorage.removeItem('sp_user');
@@ -413,11 +404,101 @@ async function resetForgotPassword() {
     } catch (e) { toast("danger", "Error", e.message); }
 }
 
-// ==================== ABOUT MODAL ====================
+// ==================== ABOUT ====================
 function openAbout() { $("aboutBackdrop").style.display = "flex"; }
 function closeAbout() { $("aboutBackdrop").style.display = "none"; }
 
-// ==================== INIT APP ====================
+// ==================== NOTIFICATIONS ====================
+function toggleNotifPanel(event) {
+    if (event) event.stopPropagation();
+    const panel = $("notifPanel");
+    const isOpen = panel.classList.contains("show");
+    if (isOpen) {
+        panel.classList.remove("show");
+    } else {
+        panel.classList.add("show");
+        loadNotifications();
+    }
+}
+
+document.addEventListener("click", (e) => {
+    const wrap = document.querySelector(".notif-wrap");
+    const panel = $("notifPanel");
+    if (panel && wrap && !wrap.contains(e.target)) panel.classList.remove("show");
+});
+
+async function loadNotifications() {
+    const c = $("notifList");
+    c.innerHTML = '<p class="muted" style="text-align:center; padding:16px;">Loading...</p>';
+    try {
+        const data = await apiCall('/api/notifications');
+        const list = data.notifications || [];
+        if (list.length === 0) {
+            c.innerHTML = emptyState("fa-bell-slash", "No notifications", "You're all caught up!");
+            return;
+        }
+        const iconMap = {
+            like: "fa-heart",
+            comment: "fa-comment",
+            friend_request: "fa-user-plus",
+            friend_accept: "fa-user-check",
+            message: "fa-comment-dots"
+        };
+        c.innerHTML = list.map(n => {
+            const av = n.from.photo || `https://ui-avatars.com/api/?background=6366f1&color=fff&name=${n.from.name?.[0] || 'U'}`;
+            let msg = "";
+            if (n.type === "like") msg = `<b>${escapeHtml(n.from.name)}</b> liked your photo`;
+            if (n.type === "comment") msg = `<b>${escapeHtml(n.from.name)}</b> commented: <i>${escapeHtml(n.text || "")}</i>`;
+            if (n.type === "friend_request") msg = `<b>${escapeHtml(n.from.name)}</b> sent you a friend request`;
+            if (n.type === "friend_accept") msg = `<b>${escapeHtml(n.from.name)}</b> accepted your friend request`;
+            if (n.type === "message") msg = `<b>${escapeHtml(n.from.name)}</b>: <i>${escapeHtml(n.text || "")}</i>`;
+            return `
+                <div class="notif-item ${n.read ? '' : 'unread'}" onclick="handleNotifClick('${n.id}','${n.type}')">
+                    <img src="${av}" alt="">
+                    <div class="notif-body">
+                        <div><i class="fas ${iconMap[n.type] || 'fa-bell'} notif-type-icon"></i>${msg}</div>
+                        <div class="notif-time">${timeAgo(n.createdAt)}</div>
+                    </div>
+                </div>
+            `;
+        }).join("");
+    } catch (e) {
+        c.innerHTML = `<p class="muted" style="text-align:center; padding:16px;">${escapeHtml(e.message)}</p>`;
+    }
+}
+
+async function handleNotifClick(id, type) {
+    try { await apiCall(`/api/notifications/${id}`, { method: 'DELETE' }); } catch {}
+    $("notifPanel").classList.remove("show");
+    if (type === "like" || type === "comment") showView("posts");
+    else if (type === "friend_request" || type === "friend_accept") showView("friends");
+    else if (type === "message") showView("friends");
+    refreshNotifBadge();
+}
+
+async function markAllNotifRead() {
+    try {
+        await apiCall('/api/notifications/read-all', { method: 'POST' });
+        loadNotifications();
+        refreshNotifBadge();
+    } catch (e) {}
+}
+
+async function refreshNotifBadge() {
+    try {
+        const data = await apiCall('/api/notifications/unread/count');
+        const badge = $("notifBadge");
+        if (!badge) return;
+        if (data.count > 0) {
+            badge.classList.remove("hidden");
+            badge.innerText = data.count > 9 ? "9+" : data.count;
+        } else {
+            badge.classList.add("hidden");
+        }
+    } catch {}
+}
+
+// ==================== INIT ====================
 async function initApp() {
     $("authSection").style.display = "none";
     $("app").style.display = "block";
@@ -426,6 +507,9 @@ async function initApp() {
     startHeartbeat();
     checkUnreadCount();
     setInterval(checkUnreadCount, 15000);
+    refreshNotifBadge();
+    if (notifPollInterval) clearInterval(notifPollInterval);
+    notifPollInterval = setInterval(refreshNotifBadge, 15000);
     scheduleSessionWarning();
     setupPullToRefresh();
     renderCompletionBar();
@@ -482,9 +566,9 @@ function showView(v) {
     if (v === "friends") { loadFriends(); loadRequests(); }
     if (v === "settings") { updateStatusUI(); loadSettingsProfile(); }
 
-    if (v !== "chat" && chatPollInterval) {
-        clearInterval(chatPollInterval);
-        chatPollInterval = null;
+    if (v !== "chat") {
+        if (chatPollInterval) { clearInterval(chatPollInterval); chatPollInterval = null; }
+        if (typingPollInterval) { clearInterval(typingPollInterval); typingPollInterval = null; }
     }
 }
 
@@ -599,7 +683,7 @@ async function loadAchievements() {
             c.innerHTML = emptyState(
                 "fa-trophy",
                 filter ? "No matches" : "No achievements yet",
-                filter ? "Try a different category." : "Add your first achievement — scholarships, awards, anything you're proud of!",
+                filter ? "Try a different category." : "Add your first achievement!",
                 `<button class="btn-inline" onclick="openAchievementModal()"><i class="fas fa-plus"></i> Add Achievement</button>`
             );
             return;
@@ -738,15 +822,16 @@ async function loadPosts() {
             c.innerHTML = emptyState(
                 "fa-camera-retro",
                 postsTab === "feed" ? "Feed is empty" : "No photos yet",
-                postsTab === "feed" ? "Add friends or post your first photo to get started!" : "Share your first memory!",
+                postsTab === "feed" ? "Add friends or post your first photo!" : "Share your first memory!",
                 postsTab === "mine" ? `<button class="btn-inline" onclick="document.getElementById('postImageInput').click()"><i class="fas fa-plus"></i> Post a photo</button>` : ""
             );
             return;
         }
         c.innerHTML = posts.map(p => {
             const av = p.author.photo || `https://ui-avatars.com/api/?background=6366f1&color=fff&name=${p.author.name?.[0] || 'U'}`;
+            const comments = p.comments || [];
             return `
-                <div class="post-card">
+                <div class="post-card" id="post-${p.id}">
                     <div class="post-head">
                         <img src="${av}">
                         <div style="flex:1;">
@@ -762,9 +847,19 @@ async function loadPosts() {
                         ${p.caption ? `<div class="post-caption">${escapeHtml(p.caption)}</div>` : ""}
                         <div class="post-actions">
                             <button class="like-btn ${p.likedByMe ? 'liked' : ''}" onclick="toggleLike('${p.id}')">
-                                <i class="fas fa-heart"></i> ${p.likes}
+                                <i class="fas fa-heart"></i> <span>${p.likes}</span>
+                            </button>
+                            <button class="comment-btn" onclick="focusComment('${p.id}')">
+                                <i class="fas fa-comment"></i> <span>${comments.length}</span>
                             </button>
                             ${p.visibility === "private" ? `<span class="chip private"><i class="fas fa-lock"></i> Private</span>` : ""}
+                        </div>
+                        <div class="comments-section" id="comments-${p.id}">
+                            ${comments.map(c => commentHtml(c, p.id)).join("")}
+                            <div class="comment-form">
+                                <input class="input" id="commentInp-${p.id}" placeholder="Write a comment..." onkeydown="if(event.key==='Enter')addComment('${p.id}')">
+                                <button class="btn-inline" onclick="addComment('${p.id}')"><i class="fas fa-paper-plane"></i></button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -773,6 +868,61 @@ async function loadPosts() {
     } catch (e) {
         c.innerHTML = emptyState("fa-triangle-exclamation", "Failed to load", e.message);
     }
+}
+
+function commentHtml(c, postId) {
+    const av = c.author.photo || `https://ui-avatars.com/api/?background=6366f1&color=fff&name=${c.author.name?.[0] || 'U'}`;
+    const mine = c.author.id === currentUser.id;
+    return `
+        <div class="comment-item" id="comment-${c.id}">
+            <img src="${av}">
+            <div class="comment-body">
+                <div class="comment-name">${escapeHtml(c.author.name)}</div>
+                <div class="comment-text">${escapeHtml(c.text)}</div>
+                <div class="comment-time">${timeAgo(c.createdAt)}</div>
+                ${mine ? `<button class="comment-del" onclick="deleteComment('${c.id}','${postId}')"><i class="fas fa-trash"></i></button>` : ""}
+            </div>
+        </div>
+    `;
+}
+
+function focusComment(postId) {
+    const inp = $("commentInp-" + postId);
+    if (inp) inp.focus();
+}
+
+async function addComment(postId) {
+    const inp = $("commentInp-" + postId);
+    if (!inp) return;
+    const text = inp.value.trim();
+    if (!text) return;
+    inp.value = "";
+    try {
+        const data = await apiCall(`/api/posts/${postId}/comments`, {
+            method: 'POST', body: JSON.stringify({ text })
+        });
+        if (data.success) {
+            const container = $("comments-" + postId);
+            const form = container.querySelector(".comment-form");
+            const div = document.createElement("div");
+            div.innerHTML = commentHtml(data.comment, postId);
+            container.insertBefore(div.firstElementChild, form);
+            // Update count
+            const btn = document.querySelector(`#post-${postId} .comment-btn span`);
+            if (btn) btn.innerText = parseInt(btn.innerText || 0) + 1;
+        }
+    } catch (e) { toast("danger", "Error", e.message); }
+}
+
+async function deleteComment(commentId, postId) {
+    if (!confirm("Delete this comment?")) return;
+    try {
+        await apiCall(`/api/comments/${commentId}`, { method: 'DELETE' });
+        const el = $("comment-" + commentId);
+        if (el) el.remove();
+        const btn = document.querySelector(`#post-${postId} .comment-btn span`);
+        if (btn) btn.innerText = Math.max(0, parseInt(btn.innerText || 1) - 1);
+    } catch (e) { toast("danger", "Error", e.message); }
 }
 
 async function toggleLike(id) {
@@ -826,7 +976,6 @@ async function loadRequests() {
         const data = await apiCall('/api/friends/requests');
         if (!data.requests?.length) {
             c.innerHTML = emptyState("fa-bell-slash", "No pending requests", "You're all caught up!");
-            // Update Friends nav badge
             updateFriendsBadge(0);
             return;
         }
@@ -874,12 +1023,7 @@ async function loadFriends() {
     try {
         const data = await apiCall('/api/friends/list');
         if (!data.friends?.length) {
-            c.innerHTML = emptyState(
-                "fa-user-friends",
-                "No friends yet",
-                "Add your first friend by their email above.",
-                ""
-            );
+            c.innerHTML = emptyState("fa-user-friends", "No friends yet", "Add your first friend by their email above.");
             $("onlineCount").innerText = "";
             return;
         }
@@ -984,6 +1128,8 @@ function openChat() {
     loadChat();
     if (chatPollInterval) clearInterval(chatPollInterval);
     chatPollInterval = setInterval(loadChat, 3000);
+    if (typingPollInterval) clearInterval(typingPollInterval);
+    typingPollInterval = setInterval(checkTyping, 2000);
 }
 
 async function loadChat() {
@@ -995,12 +1141,25 @@ async function loadChat() {
             c.innerHTML = emptyState("fa-comments", "No messages yet", "Say hi to start the conversation!");
             return;
         }
+        // Get status for read receipts
+        let status = { unreadByThem: 0, lastReadAt: null, lastMessageRead: null };
+        try { status = await apiCall(`/api/chat/${activeFriendId}/status`); } catch {}
+
         c.innerHTML = data.messages.map(m => {
             const isMine = m.from === currentUser.id;
             const time = new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            let readBadge = "";
+            if (isMine) {
+                if (status.unreadByThem === 0) {
+                    readBadge = `<div class="msg-read-status read">✓✓ Seen</div>`;
+                } else {
+                    readBadge = `<div class="msg-read-status">✓ Sent</div>`;
+                }
+            }
             return `<div class="msg-wrap ${isMine ? 'mine' : 'theirs'}">
                 <div class="msg ${isMine ? 'mine' : 'theirs'}">${escapeHtml(m.text)}</div>
                 <div class="msg-time">${time}</div>
+                ${readBadge}
             </div>`;
         }).join("");
         c.scrollTop = c.scrollHeight;
@@ -1020,11 +1179,34 @@ async function sendMessage() {
     } catch (e) { toast("danger", "Error", e.message); }
 }
 
+// ==================== TYPING ====================
+async function notifyTyping() {
+    if (!activeFriendId) return;
+    const now = Date.now();
+    if (now - lastTypingSent < 2000) return;
+    lastTypingSent = now;
+    try {
+        await apiCall(`/api/chat/${activeFriendId}/typing`, { method: 'POST' });
+    } catch {}
+}
+
+async function checkTyping() {
+    if (!activeFriendId) return;
+    try {
+        const data = await apiCall(`/api/chat/${activeFriendId}/typing`);
+        const ind = $("typingIndicator");
+        if (!ind) return;
+        if (data.typing) ind.classList.remove("hidden");
+        else ind.classList.add("hidden");
+    } catch {}
+}
+
 async function checkUnreadCount() {
     if (!authToken) return;
     try {
         const data = await apiCall('/api/chat/unread/count');
         const navFriends = $("nav-friends");
+        if (!navFriends) return;
         const existing = navFriends.querySelector(".badge");
         if (existing) existing.remove();
         if (data.count > 0) {
