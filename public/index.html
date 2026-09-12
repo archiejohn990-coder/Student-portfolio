@@ -123,7 +123,6 @@
         <div class="topbar">
           <button class="hamburger" onclick="toggleDrawer()"><i class="fas fa-bars"></i> Menu</button>
 
-          <!-- 🔍 Search -->
           <div class="search-wrap">
             <i class="fas fa-search search-icon"></i>
             <input class="input search-input" id="globalSearch" placeholder="Search people, posts, achievements..." oninput="onSearchInput()" onfocus="onSearchFocus()">
@@ -353,6 +352,7 @@
         <section id="view-stats" class="hidden view">
           <h1><i class="fas fa-chart-simple"></i> Stats</h1>
 
+          <!-- Personal (everyone) -->
           <div class="card">
             <h3><i class="fas fa-user"></i> Your Dashboard</h3>
             <div class="kpi-grid">
@@ -363,7 +363,6 @@
               <div class="kpi-tile"><i class="fas fa-comment"></i><div class="kpi-num" id="kpiComments">0</div><div class="kpi-lbl">Comments</div></div>
               <div class="kpi-tile"><i class="fas fa-paper-plane"></i><div class="kpi-num" id="kpiMsgsSent">0</div><div class="kpi-lbl">Messages sent</div></div>
               <div class="kpi-tile"><i class="fas fa-inbox"></i><div class="kpi-num" id="kpiMsgsRecv">0</div><div class="kpi-lbl">Messages received</div></div>
-              <div class="kpi-tile"><i class="fas fa-fire"></i><div class="kpi-num" id="kpiUptime">0</div><div class="kpi-lbl">Server uptime (h)</div></div>
             </div>
           </div>
 
@@ -372,9 +371,18 @@
             <canvas id="postsChart" style="width:100%; height:220px;"></canvas>
           </div>
 
-          <!-- Admin stats (only visible to admins) -->
-          <div class="card hidden" id="adminStatsCard">
-            <h3><i class="fas fa-shield-halved"></i> Admin — Site-wide</h3>
+          <!-- Admin only -->
+          <div class="card hidden" id="adminStatsCard" style="border-left:6px solid var(--danger);">
+            <h3>
+              <i class="fas fa-shield-halved" style="color:var(--danger);"></i>
+              Admin Panel — Site-wide
+              <span class="chip private" style="margin-left:8px; font-size:.7rem;">
+                <i class="fas fa-lock"></i> Restricted
+              </span>
+            </h3>
+            <p class="muted" style="font-size:.85rem; margin-bottom:12px;">
+              Only visible to administrators.
+            </p>
             <div class="kpi-grid">
               <div class="kpi-tile"><i class="fas fa-user-group"></i><div class="kpi-num" id="adminUsers">0</div><div class="kpi-lbl">Total users</div></div>
               <div class="kpi-tile"><i class="fas fa-images"></i><div class="kpi-num" id="adminPosts">0</div><div class="kpi-lbl">Total posts</div></div>
