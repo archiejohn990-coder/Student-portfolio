@@ -1,6 +1,8 @@
 /* ============================================================
-   STUDENT PORTFOLIO — Batch 4 Complete
-   Albums + Private Notes + Public Profile + PDF Export
+   STUDENT PORTFOLIO — Batches 1-4 Complete
+   Includes: notifications, comments, read receipts, typing,
+   search, stats, admin panel, activity log, albums,
+   private notes, public profile, PDF export
    ============================================================ */
 
 const API_URL = '';
@@ -161,11 +163,9 @@ function screenshotHint() { toast("info", "Tip", "Take a screenshot to share you
 
 // ==================== PDF EXPORT ====================
 async function exportProfilePDF() {
-    // Load achievements into a printable block appended to the profile section
     try {
         const data = await apiCall('/api/achievements');
         const list = (data.achievements || []).filter(a => a.visibility === "public");
-        // Remove any previous print block
         const old = $("printAchievementsBlock");
         if (old) old.remove();
         if (list.length) {
@@ -269,7 +269,7 @@ function setupPullToRefresh() {
             if (view === "albums") await loadAlbums();
             if (view === "achievements") await loadAchievements();
             if (view === "friends") { await loadFriends(); await loadRequests(); }
-            if (view === "stats") await loadStats();
+            if (view === "stats") { await loadStats(); await loadAdminStats(); }
             if (view === "activity") await loadActivity();
             await renderCompletionBar();
             toast("success", "Refreshed", "Latest data loaded.");
@@ -656,6 +656,64 @@ function drawPostsChart(months) {
     });
 }
 
+// ==================== ADMIN STATS ====================
+async function loadAdminStats() {
+    const container = document.querySelector("#view-stats");
+    if (!container) return;
+
+    const oldCard = document.getElementById("adminStatsCard");
+    if (oldCard) oldCard.remove();
+
+    if (!currentUser?.isAdmin) return;
+
+    try {
+        await apiCall('/api/admin/stats');
+    } catch {
+        return;
+    }
+
+    const card = document.createElement("div");
+    card.className = "card";
+    card.id = "adminStatsCard";
+    card.style.borderLeft = "6px solid var(--danger)";
+    card.innerHTML = `
+        <h3>
+            <i class="fas fa-shield-halved" style="color:var(--danger);"></i>
+            Admin Panel — Site-wide
+            <span class="chip private" style="margin-left:8px; font-size:.7rem;">
+                <i class="fas fa-lock"></i> Restricted
+            </span>
+        </h3>
+        <p class="muted" style="font-size:.85rem; margin-bottom:12px;">
+            Only visible to administrators.
+        </p>
+        <div class="kpi-grid">
+            <div class="kpi-tile"><i class="fas fa-user-group"></i><div class="kpi-num" id="adminUsers">0</div><div class="kpi-lbl">Total users</div></div>
+            <div class="kpi-tile"><i class="fas fa-images"></i><div class="kpi-num" id="adminPosts">0</div><div class="kpi-lbl">Total posts</div></div>
+            <div class="kpi-tile"><i class="fas fa-comments"></i><div class="kpi-num" id="adminMsgs">0</div><div class="kpi-lbl">Messages</div></div>
+            <div class="kpi-tile"><i class="fas fa-trophy"></i><div class="kpi-num" id="adminAch">0</div><div class="kpi-lbl">Achievements</div></div>
+            <div class="kpi-tile"><i class="fas fa-comment-dots"></i><div class="kpi-num" id="adminCmts">0</div><div class="kpi-lbl">Comments</div></div>
+            <div class="kpi-tile"><i class="fas fa-bell"></i><div class="kpi-num" id="adminNotifs">0</div><div class="kpi-lbl">Notifications</div></div>
+            <div class="kpi-tile"><i class="fas fa-circle" style="color:var(--success);"></i><div class="kpi-num" id="adminOnline">0</div><div class="kpi-lbl">Online now</div></div>
+            <div class="kpi-tile"><i class="fas fa-clock"></i><div class="kpi-num" id="adminUptime">0</div><div class="kpi-lbl">Uptime (h)</div></div>
+        </div>
+    `;
+    container.appendChild(card);
+
+    try {
+        const data = await apiCall('/api/admin/stats');
+        const s = data.stats;
+        if ($("adminUsers")) $("adminUsers").innerText = s.users;
+        if ($("adminPosts")) $("adminPosts").innerText = s.posts;
+        if ($("adminMsgs")) $("adminMsgs").innerText = s.messages;
+        if ($("adminAch")) $("adminAch").innerText = s.achievements;
+        if ($("adminCmts")) $("adminCmts").innerText = s.comments;
+        if ($("adminNotifs")) $("adminNotifs").innerText = s.notifications;
+        if ($("adminOnline")) $("adminOnline").innerText = s.online;
+        if ($("adminUptime")) $("adminUptime").innerText = Math.floor(s.uptimeSeconds / 3600);
+    } catch {}
+}
+
 // ==================== ACTIVITY ====================
 async function loadActivity() {
     const c = $("activityList");
@@ -758,7 +816,7 @@ function showView(v) {
     if (v === "albums") { loadAlbums(); closeAlbumDetail(); }
     if (v === "achievements") loadAchievements();
     if (v === "friends") { loadFriends(); loadRequests(); }
-    if (v === "stats") loadStats();
+    if (v === "stats") { loadStats(); loadAdminStats(); }
     if (v === "activity") loadActivity();
     if (v === "settings") { updateStatusUI(); loadSettingsProfile(); }
     if (v !== "chat") {
@@ -1560,9 +1618,8 @@ async function wipeMyData() {
     logout();
 }
 
-// ==================== PUBLIC PROFILE VIEW ====================
+// ==================== PUBLIC PROFILE ====================
 async function loadPublicProfile() {
-    // Hide app sections
     $("authSection").style.display = "none";
     $("app").style.display = "none";
     $("publicProfileSection").style.display = "block";
@@ -1639,7 +1696,6 @@ async function loadPublicProfile() {
 
 // ==================== INIT ====================
 document.addEventListener("DOMContentLoaded", () => {
-    // Public profile route?
     if (location.pathname.startsWith("/u/")) {
         loadPublicProfile();
         return;
