@@ -1,5 +1,5 @@
 /* ============================================================
-   STUDENT PORTFOLIO — Batch 3 (Search + Stats + Activity + Admin)
+   STUDENT PORTFOLIO — Batch 3 + Admin Separation (Complete)
    ============================================================ */
 
 const API_URL = '';
@@ -120,7 +120,6 @@ function computeCompletion(p, photo) {
     const missing = fields.filter(f => !f.value || !String(f.value).trim()).map(f => f.label);
     return { pct, missing };
 }
-
 async function renderCompletionBar() {
     try {
         const data = await apiCall('/api/portfolio');
@@ -151,7 +150,6 @@ async function renderCompletionBar() {
         `;
     } catch (e) {}
 }
-
 async function renderPreviewCard() {
     try {
         const data = await apiCall('/api/portfolio');
@@ -172,7 +170,6 @@ async function renderPreviewCard() {
         }
     } catch (e) {}
 }
-
 function screenshotHint() {
     toast("info", "Tip", "Take a screenshot to share your card!");
 }
@@ -317,7 +314,6 @@ function toggleMode(mode) {
     $("submitBtn").innerText = mode === "login" ? "Login" : "Create Account";
     generateCaptcha();
 }
-
 async function signup(fullName, email, password) {
     const data = await apiCall('/api/signup', {
         method: 'POST', body: JSON.stringify({ fullName, email, password })
@@ -327,7 +323,6 @@ async function signup(fullName, email, password) {
     currentUser = data.student;
     localStorage.setItem('sp_user', JSON.stringify(currentUser));
 }
-
 async function login(email, password) {
     const data = await apiCall('/api/login', {
         method: 'POST', body: JSON.stringify({ email, password })
@@ -337,7 +332,6 @@ async function login(email, password) {
     currentUser = data.student;
     localStorage.setItem('sp_user', JSON.stringify(currentUser));
 }
-
 function logout() {
     if (!confirm("Log out?")) return;
     stopHeartbeat();
@@ -571,7 +565,7 @@ function searchGoAch() {
     showView("achievements");
 }
 
-// ==================== STATS ====================
+// ==================== STATS (personal) ====================
 async function loadStats() {
     try {
         const data = await apiCall('/api/stats');
@@ -583,7 +577,6 @@ async function loadStats() {
         if ($("kpiComments")) $("kpiComments").innerText = s.commentsReceived;
         if ($("kpiMsgsSent")) $("kpiMsgsSent").innerText = s.messagesSent;
         if ($("kpiMsgsRecv")) $("kpiMsgsRecv").innerText = s.messagesReceived;
-        if ($("kpiUptime")) $("kpiUptime").innerText = Math.floor((Date.now() - performance.timeOrigin) / 3600000) || 0;
         drawPostsChart(s.postsByMonth || []);
     } catch (e) { console.error("Stats error:", e); }
 }
@@ -646,11 +639,18 @@ function drawPostsChart(months) {
         ctx.fillText(label, x, H - 10);
     });
 }
+
+// ==================== ADMIN STATS (admin only) ====================
 async function loadAdminStats() {
+    const card = $("adminStatsCard");
+    if (!currentUser?.isAdmin) {
+        if (card) card.classList.add("hidden");
+        return;
+    }
     try {
         const data = await apiCall('/api/admin/stats');
         const s = data.stats;
-        if ($("adminStatsCard")) $("adminStatsCard").classList.remove("hidden");
+        if (card) card.classList.remove("hidden");
         if ($("adminUsers")) $("adminUsers").innerText = s.users;
         if ($("adminPosts")) $("adminPosts").innerText = s.posts;
         if ($("adminMsgs")) $("adminMsgs").innerText = s.messages;
@@ -659,7 +659,9 @@ async function loadAdminStats() {
         if ($("adminNotifs")) $("adminNotifs").innerText = s.notifications;
         if ($("adminOnline")) $("adminOnline").innerText = s.online;
         if ($("adminUptime")) $("adminUptime").innerText = Math.floor(s.uptimeSeconds / 3600);
-    } catch (e) { console.error("Admin stats error:", e); }
+    } catch (e) {
+        if (card) card.classList.add("hidden");
+    }
 }
 
 // ==================== ACTIVITY LOG ====================
@@ -713,7 +715,6 @@ async function initApp() {
     renderCompletionBar();
     renderPreviewCard();
 }
-
 function hydrateTopBar() {
     if (!currentUser) return;
     $("userGreet").innerText = currentUser.fullName;
@@ -765,7 +766,6 @@ function showView(v) {
         if (typingPollInterval) { clearInterval(typingPollInterval); typingPollInterval = null; }
     }
 }
-
 function toggleDrawer() {
     $("sidebar").classList.toggle("open");
     $("drawerBackdrop").classList.toggle("show");
