@@ -36,6 +36,7 @@ const studentSchema = new mongoose.Schema({
     onlineStatus: { type: String, default: "offline" },
     lastSeen: { type: Date, default: Date.now },
     isAdmin: { type: Boolean, default: false },
+    username: { type: String, unique: true, sparse: true },
     friends: [{ type: mongoose.Schema.Types.ObjectId, ref: "Student" }],
     friendRequests: [{ type: mongoose.Schema.Types.ObjectId, ref: "Student" }],
     createdAt: { type: Date, default: Date.now }
@@ -63,6 +64,7 @@ const achievementSchema = new mongoose.Schema({
     category: { type: String, default: "Academic" },
     date: { type: String, default: "" },
     visibility: { type: String, default: "public" },
+    privateNote: { type: String, default: "" },
     createdAt: { type: Date, default: Date.now }
 });
 
@@ -80,6 +82,7 @@ const postSchema = new mongoose.Schema({
     image: { type: String, required: true },
     caption: { type: String, default: "" },
     visibility: { type: String, default: "friends" },
+    albumId: { type: mongoose.Schema.Types.ObjectId, ref: "Album", default: null },
     likes: [{ type: mongoose.Schema.Types.ObjectId, ref: "Student" }],
     createdAt: { type: Date, default: Date.now }
 });
@@ -109,6 +112,13 @@ const activitySchema = new mongoose.Schema({
     createdAt: { type: Date, default: Date.now }
 });
 
+const albumSchema = new mongoose.Schema({
+    studentId: { type: mongoose.Schema.Types.ObjectId, ref: "Student", required: true },
+    name: { type: String, required: true },
+    cover: { type: String, default: null },
+    createdAt: { type: Date, default: Date.now }
+});
+
 const Student = mongoose.model("Student", studentSchema);
 const Portfolio = mongoose.model("Portfolio", portfolioSchema);
 const Achievement = mongoose.model("Achievement", achievementSchema);
@@ -117,6 +127,7 @@ const Post = mongoose.model("Post", postSchema);
 const Comment = mongoose.model("Comment", commentSchema);
 const Notification = mongoose.model("Notification", notificationSchema);
 const Activity = mongoose.model("Activity", activitySchema);
+const Album = mongoose.model("Album", albumSchema);
 
 // ==================== MIDDLEWARE ====================
 const authenticateToken = async (req, res, next) => {
@@ -177,18 +188,23 @@ app.post("/api/signup", async (req, res) => {
         const passwordHash = await bcrypt.hash(password, 10);
         const totalUsers = await Student.countDocuments();
         const isFirstUser = totalUsers === 0;
+        // Auto-generate username from email prefix
+        let username = email.split("@")[0].toLowerCase().replace(/[^a-z0-9_]/g, "");
+        const taken = await Student.findOne({ username });
+        if (taken) username = username + Math.floor(Math.random() * 9999);
         const student = await Student.create({
             fullName, email, passwordHash,
             onlineStatus: "online",
             lastSeen: new Date(),
-            isAdmin: isFirstUser
+            isAdmin: isFirstUser,
+            username
         });
         await Portfolio.create({ studentId: student._id, fullName });
         await logActivity(student._id, "signup", isFirstUser ? "Created account (admin)" : "Created account");
         const token = jwt.sign({ studentId: student._id }, process.env.JWT_SECRET, { expiresIn: "7d" });
         res.json({
             success: true, token,
-            student: { id: student._id, fullName, email, language: "en", isAdmin: student.isAdmin }
+            student: { id: student._id, fullName, email, language: "en", isAdmin: student.isAdmin, username }
         });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -200,6 +216,14 @@ app.post("/api/login", async (req, res) => {
         if (!s) return res.status(401).json({ error: "Invalid credentials" });
         const ok = await bcrypt.compare(password, s.passwordHash);
         if (!ok) return res.status(401).json({ error: "Invalid credentials" });
+        // Backfill username if missing
+        if (!s.username) {
+            let base = s.email.split("@")[0].toLowerCase().replace(/[^a-z0-9_]/g, "");
+            let attempt = base;
+            let taken = await Student.findOne({ username: attempt });
+            while (taken) { attempt = base + Math.floor(Math.random() * 9999); taken = await Student.findOne({ username: attempt }); }
+            s.username = attempt;
+        }
         s.onlineStatus = "online";
         s.lastSeen = new Date();
         await s.save();
@@ -209,7 +233,7 @@ app.post("/api/login", async (req, res) => {
             success: true, token,
             student: {
                 id: s._id, fullName: s.fullName, email: s.email,
-                photo: s.photo, language: s.language, isAdmin: s.isAdmin
+                photo: s.photo, language: s.language, isAdmin: s.isAdmin, username: s.username
             }
         });
     } catch (err) { res.status(500).json({ error: err.message }); }
@@ -262,6 +286,19 @@ app.put("/api/user/name", authenticateToken, async (req, res) => {
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+app.put("/api/user/username", authenticateToken, async (req, res) => {
+    try {
+        let { username } = req.body;
+        username = (username || "").toLowerCase().trim().replace(/[^a-z0-9_]/g, "");
+        if (username.length < 3) return res.status(400).json({ error: "Username must be 3+ characters (a-z, 0-9, _)" });
+        const taken = await Student.findOne({ username, _id: { $ne: req.studentId } });
+        if (taken) return res.status(400).json({ error: "Username already taken" });
+        await Student.findByIdAndUpdate(req.studentId, { username });
+        await logActivity(req.studentId, "username_change", `Username changed to @${username}`);
+        res.json({ success: true, username });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // ==================== PORTFOLIO ====================
 app.get("/api/portfolio", authenticateToken, async (req, res) => {
     try {
@@ -295,12 +332,13 @@ app.get("/api/achievements", authenticateToken, async (req, res) => {
 
 app.post("/api/achievements", authenticateToken, async (req, res) => {
     try {
-        const { title, description, category, date, visibility } = req.body;
+        const { title, description, category, date, visibility, privateNote } = req.body;
         if (!title) return res.status(400).json({ error: "Title required" });
         const a = await Achievement.create({
             studentId: req.studentId, title,
             description: description || "", category: category || "Academic",
-            date: date || "", visibility: visibility === "private" ? "private" : "public"
+            date: date || "", visibility: visibility === "private" ? "private" : "public",
+            privateNote: privateNote || ""
         });
         await logActivity(req.studentId, "achievement_add", `Added achievement: ${title}`);
         res.json({ success: true, achievement: a });
@@ -328,12 +366,13 @@ app.delete("/api/achievements/:id", authenticateToken, async (req, res) => {
 });
 
 // ==================== POSTS ====================
-async function fetchPostsForUser(userId, filter) {
+async function fetchPostsForUser(userId, filter, albumId = null) {
     const me = await Student.findById(userId);
     const ids = filter === "feed" ? [...me.friends, me._id] : [me._id];
     const query = filter === "feed"
         ? { studentId: { $in: ids }, $or: [{ visibility: "friends" }, { studentId: me._id }] }
         : { studentId: me._id };
+    if (albumId) query.albumId = albumId;
     const posts = await Post.find(query)
         .populate("studentId", "fullName photo")
         .sort({ createdAt: -1 })
@@ -356,6 +395,7 @@ async function fetchPostsForUser(userId, filter) {
     return posts.map(p => ({
         id: p._id, caption: p.caption, image: p.image,
         visibility: p.visibility, createdAt: p.createdAt,
+        albumId: p.albumId,
         likes: p.likes.length,
         likedByMe: p.likes.map(l => l.toString()).includes(userId),
         author: { id: p.studentId._id, name: p.studentId.fullName, photo: p.studentId.photo },
@@ -372,19 +412,20 @@ app.get("/api/posts/feed", authenticateToken, async (req, res) => {
 
 app.get("/api/posts/mine", authenticateToken, async (req, res) => {
     try {
-        const posts = await fetchPostsForUser(req.studentId, "mine");
+        const posts = await fetchPostsForUser(req.studentId, "mine", req.query.albumId || null);
         res.json({ success: true, posts });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 app.post("/api/posts", authenticateToken, async (req, res) => {
     try {
-        const { image, caption, visibility } = req.body;
+        const { image, caption, visibility, albumId } = req.body;
         if (!image) return res.status(400).json({ error: "Image required" });
         const post = await Post.create({
             studentId: req.studentId, image,
             caption: caption || "",
-            visibility: visibility === "private" ? "private" : "friends"
+            visibility: visibility === "private" ? "private" : "friends",
+            albumId: albumId || null
         });
         await logActivity(req.studentId, "post_create", "Posted a photo", post._id);
         res.json({ success: true, post });
@@ -466,6 +507,92 @@ app.delete("/api/comments/:id", authenticateToken, async (req, res) => {
         if (!c) return res.status(404).json({ error: "Not found" });
         if (c.studentId.toString() !== req.studentId) return res.status(403).json({ error: "Not yours" });
         await c.deleteOne();
+        res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ==================== ALBUMS ====================
+app.get("/api/albums", authenticateToken, async (req, res) => {
+    try {
+        const albums = await Album.find({ studentId: req.studentId }).sort({ createdAt: -1 });
+        const counts = await Post.aggregate([
+            { $match: { studentId: req.studentId, albumId: { $ne: null } } },
+            { $group: { _id: "$albumId", count: { $sum: 1 } } }
+        ]);
+        const countMap = {};
+        counts.forEach(c => countMap[c._id.toString()] = c.count);
+        res.json({
+            success: true,
+            albums: albums.map(a => ({
+                id: a._id, name: a.name, cover: a.cover,
+                count: countMap[a._id.toString()] || 0,
+                createdAt: a.createdAt
+            }))
+        });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post("/api/albums", authenticateToken, async (req, res) => {
+    try {
+        const { name, cover } = req.body;
+        if (!name || !name.trim()) return res.status(400).json({ error: "Album name required" });
+        const album = await Album.create({
+            studentId: req.studentId,
+            name: name.trim().slice(0, 60),
+            cover: cover || null
+        });
+        await logActivity(req.studentId, "album_create", `Created album: ${album.name}`);
+        res.json({ success: true, album });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.put("/api/albums/:id", authenticateToken, async (req, res) => {
+    try {
+        const { name, cover } = req.body;
+        const album = await Album.findOneAndUpdate(
+            { _id: req.params.id, studentId: req.studentId },
+            { name, cover },
+            { new: true }
+        );
+        if (!album) return res.status(404).json({ error: "Not found" });
+        res.json({ success: true, album });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.delete("/api/albums/:id", authenticateToken, async (req, res) => {
+    try {
+        await Album.findOneAndDelete({ _id: req.params.id, studentId: req.studentId });
+        // Detach photos from album (don't delete photos)
+        await Post.updateMany({ studentId: req.studentId, albumId: req.params.id }, { albumId: null });
+        await logActivity(req.studentId, "album_delete", "Deleted album");
+        res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.get("/api/albums/:id/photos", authenticateToken, async (req, res) => {
+    try {
+        const posts = await Post.find({
+            studentId: req.studentId,
+            albumId: req.params.id
+        }).sort({ createdAt: -1 });
+        res.json({
+            success: true,
+            photos: posts.map(p => ({
+                id: p._id, image: p.image, caption: p.caption, createdAt: p.createdAt
+            }))
+        });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post("/api/posts/:id/album", authenticateToken, async (req, res) => {
+    try {
+        const { albumId } = req.body;
+        const post = await Post.findOneAndUpdate(
+            { _id: req.params.id, studentId: req.studentId },
+            { albumId: albumId || null },
+            { new: true }
+        );
+        if (!post) return res.status(404).json({ error: "Not found" });
         res.json({ success: true });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -581,16 +708,19 @@ app.get("/api/friends/:id/profile", authenticateToken, async (req, res) => {
         const me = await Student.findById(req.studentId);
         if (!me.friends.map(f => f.toString()).includes(req.params.id))
             return res.status(403).json({ error: "Not your friend" });
-        const friend = await Student.findById(req.params.id).select("fullName email photo onlineStatus lastSeen");
+        const friend = await Student.findById(req.params.id).select("fullName email photo onlineStatus lastSeen username");
         if (!friend) return res.status(404).json({ error: "Not found" });
         const portfolio = await Portfolio.findOne({ studentId: friend._id });
-        const achievements = await Achievement.find({ studentId: friend._id, visibility: "public" }).sort({ date: -1 });
+        // NOTE: privateNote is NEVER returned to friends
+        const achievements = await Achievement.find({ studentId: friend._id, visibility: "public" })
+            .select("-privateNote")
+            .sort({ date: -1 });
         const posts = await Post.find({ studentId: friend._id, visibility: "friends" }).sort({ createdAt: -1 }).limit(30);
         res.json({
             success: true,
             friend: {
                 id: friend._id, name: friend.fullName, email: friend.email, photo: friend.photo,
-                onlineStatus: computeOnlineStatus(friend), lastSeen: friend.lastSeen
+                onlineStatus: computeOnlineStatus(friend), lastSeen: friend.lastSeen, username: friend.username
             },
             portfolio: portfolio || {},
             achievements,
@@ -600,6 +730,34 @@ app.get("/api/friends/:id/profile", authenticateToken, async (req, res) => {
                 likedByMe: p.likes.map(l => l.toString()).includes(req.studentId),
                 createdAt: p.createdAt
             }))
+        });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ==================== PUBLIC PROFILE (no auth) ====================
+app.get("/api/public/u/:username", async (req, res) => {
+    try {
+        const student = await Student.findOne({ username: req.params.username.toLowerCase() })
+            .select("fullName photo username createdAt");
+        if (!student) return res.status(404).json({ error: "Profile not found" });
+        const portfolio = await Portfolio.findOne({ studentId: student._id }).select("-studentId -__v");
+        const achievements = await Achievement.find({
+            studentId: student._id, visibility: "public"
+        }).select("title description category date").sort({ date: -1 });
+        const stats = {
+            achievements: achievements.length,
+            memberSince: student.createdAt
+        };
+        res.json({
+            success: true,
+            profile: {
+                name: student.fullName,
+                username: student.username,
+                photo: student.photo,
+                portfolio: portfolio || {},
+                achievements,
+                stats
+            }
         });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -692,8 +850,8 @@ app.get("/api/search", authenticateToken, async (req, res) => {
 
         const students = await Student.find({
             _id: { $ne: req.studentId },
-            $or: [{ fullName: regex }, { email: regex }]
-        }).select("fullName email photo").limit(10);
+            $or: [{ fullName: regex }, { email: regex }, { username: regex }]
+        }).select("fullName email photo username").limit(10);
 
         const me = await Student.findById(req.studentId);
         const visibleIds = [...me.friends, me._id];
@@ -714,13 +872,14 @@ app.get("/api/search", authenticateToken, async (req, res) => {
             title: regex
         })
         .populate("studentId", "fullName photo")
+        .select("-privateNote")
         .limit(10);
 
         res.json({
             success: true,
             results: {
                 students: students.map(s => ({
-                    id: s._id, name: s.fullName, email: s.email, photo: s.photo
+                    id: s._id, name: s.fullName, email: s.email, photo: s.photo, username: s.username
                 })),
                 posts: posts.map(p => ({
                     id: p._id, caption: p.caption, image: p.image,
@@ -735,7 +894,7 @@ app.get("/api/search", authenticateToken, async (req, res) => {
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// ==================== STATS (personal) ====================
+// ==================== STATS ====================
 app.get("/api/stats", authenticateToken, async (req, res) => {
     try {
         const me = await Student.findById(req.studentId).populate("friends", "_id");
@@ -773,11 +932,8 @@ app.get("/api/stats", authenticateToken, async (req, res) => {
         res.json({
             success: true,
             stats: {
-                posts: totalPosts,
-                achievements: totalAchievements,
-                friends: totalFriends,
-                messagesSent: totalMessagesSent,
-                messagesReceived: totalMessagesReceived,
+                posts: totalPosts, achievements: totalAchievements, friends: totalFriends,
+                messagesSent: totalMessagesSent, messagesReceived: totalMessagesReceived,
                 likesReceived: likesAgg[0]?.total || 0,
                 commentsReceived: commentsAgg[0]?.total || 0,
                 postsByMonth
@@ -810,6 +966,7 @@ app.get("/api/admin/stats", authenticateToken, requireAdmin, async (req, res) =>
         const totalAchievements = await Achievement.countDocuments();
         const totalComments = await Comment.countDocuments();
         const totalNotifications = await Notification.countDocuments();
+        const totalAlbums = await Album.countDocuments();
         const onlineNow = await Student.countDocuments({
             lastSeen: { $gte: new Date(Date.now() - 60 * 1000) }
         });
@@ -818,14 +975,10 @@ app.get("/api/admin/stats", authenticateToken, requireAdmin, async (req, res) =>
         res.json({
             success: true,
             stats: {
-                users: totalUsers,
-                posts: totalPosts,
-                messages: totalMessages,
-                achievements: totalAchievements,
-                comments: totalComments,
-                notifications: totalNotifications,
-                online: onlineNow,
-                uptimeSeconds: Math.floor(uptime)
+                users: totalUsers, posts: totalPosts, messages: totalMessages,
+                achievements: totalAchievements, comments: totalComments,
+                notifications: totalNotifications, albums: totalAlbums,
+                online: onlineNow, uptimeSeconds: Math.floor(uptime)
             }
         });
     } catch (err) { res.status(500).json({ error: err.message }); }
@@ -834,9 +987,7 @@ app.get("/api/admin/stats", authenticateToken, requireAdmin, async (req, res) =>
 app.post("/api/admin/promote-me", authenticateToken, async (req, res) => {
     try {
         const totalAdmins = await Student.countDocuments({ isAdmin: true });
-        if (totalAdmins > 0) {
-            return res.status(403).json({ error: "An admin already exists. Contact them." });
-        }
+        if (totalAdmins > 0) return res.status(403).json({ error: "An admin already exists. Contact them." });
         await Student.findByIdAndUpdate(req.studentId, { isAdmin: true });
         res.json({ success: true, message: "You are now an admin. Please log out and log back in." });
     } catch (err) { res.status(500).json({ error: err.message }); }
@@ -892,6 +1043,7 @@ app.delete("/api/user/delete", authenticateToken, async (req, res) => {
         await Comment.deleteMany({ studentId: req.studentId });
         await Notification.deleteMany({ $or: [{ toUser: req.studentId }, { fromUser: req.studentId }] });
         await Activity.deleteMany({ studentId: req.studentId });
+        await Album.deleteMany({ studentId: req.studentId });
         await Student.updateMany({ friends: req.studentId }, { $pull: { friends: req.studentId } });
         await Student.updateMany({ friendRequests: req.studentId }, { $pull: { friendRequests: req.studentId } });
         await Student.findByIdAndDelete(req.studentId);
@@ -900,6 +1052,11 @@ app.delete("/api/user/delete", authenticateToken, async (req, res) => {
 });
 
 // ==================== SERVE ====================
+// Public profile page (no auth)
+app.get("/u/:username", (req, res) => {
+    res.sendFile(path.join(__dirname, "public", "index.html"));
+});
+
 app.get("/", (req, res) => res.sendFile(path.join(__dirname, "public", "index.html")));
 
 app.listen(PORT, "0.0.0.0", () => console.log(`🎓 Running on port ${PORT}`));
