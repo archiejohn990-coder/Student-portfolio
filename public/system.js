@@ -1,6 +1,5 @@
 /* ============================================================
-   STUDENT PORTFOLIO — Batch 2 Complete
-   Notifications + Comments + Read Receipts + Typing
+   STUDENT PORTFOLIO — Batch 3 (Search + Stats + Activity + Admin)
    ============================================================ */
 
 const API_URL = '';
@@ -18,7 +17,8 @@ let captchaCode = "";
 let postImageB64 = null;
 let sessionWarnTimeout = null;
 let lastTypingSent = 0;
-const VIEW_ORDER = ["profile", "posts", "achievements", "friends", "settings", "friend-detail", "chat"];
+let searchTimeout = null;
+const VIEW_ORDER = ["profile", "posts", "achievements", "friends", "stats", "activity", "settings", "friend-detail", "chat"];
 
 // ==================== HELPERS ====================
 function $(id) { return document.getElementById(id); }
@@ -76,7 +76,6 @@ function skeletonFriends(count = 3) {
     }
     return html;
 }
-
 function emptyState(icon, title, text, actionHtml = "") {
     return `
         <div class="empty">
@@ -87,7 +86,6 @@ function emptyState(icon, title, text, actionHtml = "") {
         </div>
     `;
 }
-
 function categoryIcon(cat) {
     const map = {
         "Academic": "fa-graduation-cap",
@@ -226,11 +224,9 @@ function setupPullToRefresh() {
     if (!main || !ind) return;
     let startY = 0, pulling = false, distance = 0;
     const THRESHOLD = 70;
-
     main.addEventListener("touchstart", (e) => {
         if (main.scrollTop === 0) { startY = e.touches[0].clientY; pulling = true; }
     }, { passive: true });
-
     main.addEventListener("touchmove", (e) => {
         if (!pulling) return;
         distance = e.touches[0].clientY - startY;
@@ -240,7 +236,6 @@ function setupPullToRefresh() {
             else ind.classList.remove("ready");
         }
     }, { passive: true });
-
     main.addEventListener("touchend", async () => {
         if (!pulling) return;
         ind.classList.remove("ready");
@@ -252,6 +247,8 @@ function setupPullToRefresh() {
             if (view === "posts") await loadPosts();
             if (view === "achievements") await loadAchievements();
             if (view === "friends") { await loadFriends(); await loadRequests(); }
+            if (view === "stats") { await loadStats(); await loadAdminStats(); }
+            if (view === "activity") await loadActivity();
             await renderCompletionBar();
             toast("success", "Refreshed", "Latest data loaded.");
         }
@@ -371,7 +368,6 @@ function showForgotStep1() {
     $("forgotStep1").style.display = "block";
     $("forgotStep2").style.display = "none";
 }
-
 async function sendForgotOtp() {
     const email = $("forgotEmail").value.trim().toLowerCase();
     if (!email) return toast("warn", "Email Required", "Enter your email");
@@ -386,7 +382,6 @@ async function sendForgotOtp() {
         }
     } catch (e) { toast("danger", "Error", e.message); }
 }
-
 async function resetForgotPassword() {
     const email = $("forgotEmail").value.trim().toLowerCase();
     const otp = $("otpCode").value.trim();
@@ -413,20 +408,14 @@ function toggleNotifPanel(event) {
     if (event) event.stopPropagation();
     const panel = $("notifPanel");
     const isOpen = panel.classList.contains("show");
-    if (isOpen) {
-        panel.classList.remove("show");
-    } else {
-        panel.classList.add("show");
-        loadNotifications();
-    }
+    if (isOpen) panel.classList.remove("show");
+    else { panel.classList.add("show"); loadNotifications(); }
 }
-
 document.addEventListener("click", (e) => {
     const wrap = document.querySelector(".notif-wrap");
     const panel = $("notifPanel");
     if (panel && wrap && !wrap.contains(e.target)) panel.classList.remove("show");
 });
-
 async function loadNotifications() {
     const c = $("notifList");
     c.innerHTML = '<p class="muted" style="text-align:center; padding:16px;">Loading...</p>';
@@ -438,10 +427,8 @@ async function loadNotifications() {
             return;
         }
         const iconMap = {
-            like: "fa-heart",
-            comment: "fa-comment",
-            friend_request: "fa-user-plus",
-            friend_accept: "fa-user-check",
+            like: "fa-heart", comment: "fa-comment",
+            friend_request: "fa-user-plus", friend_accept: "fa-user-check",
             message: "fa-comment-dots"
         };
         c.innerHTML = list.map(n => {
@@ -466,7 +453,6 @@ async function loadNotifications() {
         c.innerHTML = `<p class="muted" style="text-align:center; padding:16px;">${escapeHtml(e.message)}</p>`;
     }
 }
-
 async function handleNotifClick(id, type) {
     try { await apiCall(`/api/notifications/${id}`, { method: 'DELETE' }); } catch {}
     $("notifPanel").classList.remove("show");
@@ -475,7 +461,6 @@ async function handleNotifClick(id, type) {
     else if (type === "message") showView("friends");
     refreshNotifBadge();
 }
-
 async function markAllNotifRead() {
     try {
         await apiCall('/api/notifications/read-all', { method: 'POST' });
@@ -483,7 +468,6 @@ async function markAllNotifRead() {
         refreshNotifBadge();
     } catch (e) {}
 }
-
 async function refreshNotifBadge() {
     try {
         const data = await apiCall('/api/notifications/unread/count');
@@ -492,10 +476,224 @@ async function refreshNotifBadge() {
         if (data.count > 0) {
             badge.classList.remove("hidden");
             badge.innerText = data.count > 9 ? "9+" : data.count;
-        } else {
-            badge.classList.add("hidden");
-        }
+        } else badge.classList.add("hidden");
     } catch {}
+}
+
+// ==================== SEARCH ====================
+function onSearchInput() {
+    if (searchTimeout) clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(doSearch, 300);
+}
+function onSearchFocus() {
+    const panel = $("searchResults");
+    if (panel) panel.classList.add("show");
+}
+document.addEventListener("click", (e) => {
+    const wrap = document.querySelector(".search-wrap");
+    const panel = $("searchResults");
+    if (panel && wrap && !wrap.contains(e.target)) panel.classList.remove("show");
+});
+async function doSearch() {
+    const q = $("globalSearch").value.trim();
+    const panel = $("searchResults");
+    if (!panel) return;
+    if (!q) {
+        panel.innerHTML = '<p class="muted" style="text-align:center; padding:16px;">Type to search...</p>';
+        return;
+    }
+    panel.classList.add("show");
+    panel.innerHTML = '<p class="muted" style="text-align:center; padding:16px;">Searching...</p>';
+    try {
+        const data = await apiCall(`/api/search?q=${encodeURIComponent(q)}`);
+        const r = data.results || {};
+        let html = "";
+        if (r.students?.length) {
+            html += `<div class="search-section-title">People</div>`;
+            r.students.forEach(s => {
+                const av = s.photo || `https://ui-avatars.com/api/?background=6366f1&color=fff&name=${s.name?.[0] || 'U'}`;
+                html += `<div class="search-item" onclick="searchGoFriend('${s.id}')">
+                    <img src="${av}">
+                    <div class="s-body">
+                        <div class="s-name">${escapeHtml(s.name)}</div>
+                        <div class="s-sub">${escapeHtml(s.email)}</div>
+                    </div>
+                </div>`;
+            });
+        }
+        if (r.posts?.length) {
+            html += `<div class="search-section-title">Posts</div>`;
+            r.posts.forEach(p => {
+                html += `<div class="search-item" onclick="searchGoPost('${p.id}')">
+                    <img src="${p.image}" class="s-thumb">
+                    <div class="s-body">
+                        <div class="s-name">${escapeHtml(p.caption || "(no caption)")}</div>
+                        <div class="s-sub">By ${escapeHtml(p.author.name)}</div>
+                    </div>
+                </div>`;
+            });
+        }
+        if (r.achievements?.length) {
+            html += `<div class="search-section-title">Achievements</div>`;
+            r.achievements.forEach(a => {
+                html += `<div class="search-item" onclick="searchGoAch()">
+                    <div class="s-thumb person-logo xs"><i class="fas ${categoryIcon(a.category)}"></i></div>
+                    <div class="s-body">
+                        <div class="s-name">${escapeHtml(a.title)}</div>
+                        <div class="s-sub">${escapeHtml(a.category)} • ${escapeHtml(a.author.name)}</div>
+                    </div>
+                </div>`;
+            });
+        }
+        if (!html) html = '<p class="muted" style="text-align:center; padding:16px;">No results found.</p>';
+        panel.innerHTML = html;
+    } catch (e) {
+        panel.innerHTML = `<p class="muted" style="text-align:center; padding:16px;">${escapeHtml(e.message)}</p>`;
+    }
+}
+function searchGoFriend(id) {
+    $("searchResults").classList.remove("show");
+    $("globalSearch").value = "";
+    viewFriendProfile(id).catch(() => {
+        toast("info", "Not a friend", "Send them a friend request to see their profile.");
+        showView("friends");
+    });
+}
+function searchGoPost(id) {
+    $("searchResults").classList.remove("show");
+    $("globalSearch").value = "";
+    showView("posts");
+    setTimeout(() => openPostViewer(id), 400);
+}
+function searchGoAch() {
+    $("searchResults").classList.remove("show");
+    $("globalSearch").value = "";
+    showView("achievements");
+}
+
+// ==================== STATS ====================
+async function loadStats() {
+    try {
+        const data = await apiCall('/api/stats');
+        const s = data.stats;
+        if ($("kpiPosts")) $("kpiPosts").innerText = s.posts;
+        if ($("kpiAch")) $("kpiAch").innerText = s.achievements;
+        if ($("kpiFriends")) $("kpiFriends").innerText = s.friends;
+        if ($("kpiLikes")) $("kpiLikes").innerText = s.likesReceived;
+        if ($("kpiComments")) $("kpiComments").innerText = s.commentsReceived;
+        if ($("kpiMsgsSent")) $("kpiMsgsSent").innerText = s.messagesSent;
+        if ($("kpiMsgsRecv")) $("kpiMsgsRecv").innerText = s.messagesReceived;
+        if ($("kpiUptime")) $("kpiUptime").innerText = Math.floor((Date.now() - performance.timeOrigin) / 3600000) || 0;
+        drawPostsChart(s.postsByMonth || []);
+    } catch (e) { console.error("Stats error:", e); }
+}
+function drawPostsChart(months) {
+    const c = $("postsChart");
+    if (!c) return;
+    const ctx = c.getContext("2d");
+    const dpr = window.devicePixelRatio || 1;
+    const cssW = c.clientWidth || 600;
+    const cssH = 220;
+    c.width = Math.floor(cssW * dpr);
+    c.height = Math.floor(cssH * dpr);
+    ctx.scale(dpr, dpr);
+    const W = cssW, H = cssH;
+    ctx.clearRect(0, 0, W, H);
+    const pad = 30;
+    const max = Math.max(1, ...months.map(m => m.count));
+    const barW = (W - pad * 2) / months.length;
+    ctx.globalAlpha = 0.25;
+    ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue("--border");
+    for (let i = 0; i <= 4; i++) {
+        const y = pad + (H - pad * 2) * (i / 4);
+        ctx.beginPath(); ctx.moveTo(pad, y); ctx.lineTo(W - pad, y); ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+    const primary = getComputedStyle(document.documentElement).getPropertyValue("--primary").trim() || "#6366f1";
+    const primary2 = getComputedStyle(document.documentElement).getPropertyValue("--primary2").trim() || "#8b5cf6";
+    months.forEach((m, i) => {
+        const bh = (H - pad * 2) * (m.count / max);
+        const x = pad + i * barW + 6;
+        const y = H - pad - bh;
+        const bw = Math.max(8, barW - 12);
+        const grad = ctx.createLinearGradient(0, y, 0, H - pad);
+        grad.addColorStop(0, primary);
+        grad.addColorStop(1, primary2);
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        const r = Math.min(6, bw / 2);
+        ctx.moveTo(x, H - pad);
+        ctx.lineTo(x, y + r);
+        ctx.quadraticCurveTo(x, y, x + r, y);
+        ctx.lineTo(x + bw - r, y);
+        ctx.quadraticCurveTo(x + bw, y, x + bw, y + r);
+        ctx.lineTo(x + bw, H - pad);
+        ctx.closePath();
+        ctx.fill();
+        if (m.count > 0) {
+            ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue("--text");
+            ctx.font = "700 11px system-ui";
+            ctx.textAlign = "center";
+            ctx.fillText(m.count, x + bw / 2, y - 4);
+        }
+    });
+    ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue("--muted");
+    ctx.font = "10px system-ui";
+    ctx.textAlign = "center";
+    months.forEach((m, i) => {
+        const label = m.month.slice(5);
+        const x = pad + i * barW + barW / 2;
+        ctx.fillText(label, x, H - 10);
+    });
+}
+async function loadAdminStats() {
+    try {
+        const data = await apiCall('/api/admin/stats');
+        const s = data.stats;
+        if ($("adminStatsCard")) $("adminStatsCard").classList.remove("hidden");
+        if ($("adminUsers")) $("adminUsers").innerText = s.users;
+        if ($("adminPosts")) $("adminPosts").innerText = s.posts;
+        if ($("adminMsgs")) $("adminMsgs").innerText = s.messages;
+        if ($("adminAch")) $("adminAch").innerText = s.achievements;
+        if ($("adminCmts")) $("adminCmts").innerText = s.comments;
+        if ($("adminNotifs")) $("adminNotifs").innerText = s.notifications;
+        if ($("adminOnline")) $("adminOnline").innerText = s.online;
+        if ($("adminUptime")) $("adminUptime").innerText = Math.floor(s.uptimeSeconds / 3600);
+    } catch (e) { console.error("Admin stats error:", e); }
+}
+
+// ==================== ACTIVITY LOG ====================
+async function loadActivity() {
+    const c = $("activityList");
+    c.innerHTML = skeletonList(3);
+    try {
+        const data = await apiCall('/api/activity');
+        const list = data.activity || [];
+        if (list.length === 0) {
+            c.innerHTML = emptyState("fa-clock", "No activity yet", "Start posting, adding achievements, and chatting!");
+            return;
+        }
+        const iconMap = {
+            signup: "fa-user-plus", login: "fa-right-to-bracket",
+            password_reset: "fa-key", password_change: "fa-key",
+            name_change: "fa-user-pen", photo_change: "fa-image",
+            profile_update: "fa-id-card",
+            post_create: "fa-camera", post_delete: "fa-trash",
+            achievement_add: "fa-trophy", achievement_update: "fa-pen", achievement_delete: "fa-trash",
+            friend_request: "fa-user-plus", friend_accept: "fa-user-check", unfriend: "fa-user-minus"
+        };
+        c.innerHTML = list.map(a => `
+            <div class="activity-item">
+                <div class="activity-icon"><i class="fas ${iconMap[a.type] || 'fa-circle-dot'}"></i></div>
+                <div class="activity-body">
+                    <div class="activity-text">${escapeHtml(a.detail || a.type.replace(/_/g, " "))}</div>
+                    <div class="activity-time">${timeAgo(a.createdAt)}</div>
+                </div>
+            </div>
+        `).join("");
+    } catch (e) {
+        c.innerHTML = emptyState("fa-triangle-exclamation", "Failed to load", e.message);
+    }
 }
 
 // ==================== INIT ====================
@@ -535,7 +733,6 @@ function showView(v) {
     });
     const nextIdx = VIEW_ORDER.indexOf(v);
     const goRight = nextIdx >= currentIdx;
-
     VIEW_ORDER.forEach(id => {
         const el = $("view-" + id);
         if (el) {
@@ -543,7 +740,6 @@ function showView(v) {
             el.classList.remove("view-enter-right", "view-enter-left");
         }
     });
-
     const target = $("view-" + v);
     if (target) {
         target.classList.remove("hidden");
@@ -553,19 +749,17 @@ function showView(v) {
         const main = document.querySelector(".main");
         if (main) main.scrollTo({ top: 0, behavior: "smooth" });
     }
-
     document.querySelectorAll(".nav a").forEach(a => a.classList.remove("active"));
     const nav = $("nav-" + v);
     if (nav) nav.classList.add("active");
-
     if (window.innerWidth <= 820) closeDrawer();
-
     if (v === "profile") { loadProfile(); loadSettingsProfile(); renderPreviewCard(); renderCompletionBar(); }
     if (v === "posts") loadPosts();
     if (v === "achievements") loadAchievements();
     if (v === "friends") { loadFriends(); loadRequests(); }
+    if (v === "stats") { loadStats(); loadAdminStats(); }
+    if (v === "activity") loadActivity();
     if (v === "settings") { updateStatusUI(); loadSettingsProfile(); }
-
     if (v !== "chat") {
         if (chatPollInterval) { clearInterval(chatPollInterval); chatPollInterval = null; }
         if (typingPollInterval) { clearInterval(typingPollInterval); typingPollInterval = null; }
@@ -598,7 +792,6 @@ async function loadProfile() {
         $("pSkills").value = (p.skills || []).join(", ");
     } catch (e) { toast("danger", "Error", "Load failed"); }
 }
-
 async function saveProfile() {
     try {
         await apiCall('/api/portfolio', {
@@ -621,7 +814,6 @@ async function saveProfile() {
         renderPreviewCard();
     } catch (e) { toast("danger", "Error", e.message); }
 }
-
 async function loadSettingsProfile() {
     try {
         const data = await apiCall('/api/portfolio');
@@ -631,7 +823,6 @@ async function loadSettingsProfile() {
         $("setBio").value = p.bio || "";
     } catch (e) {}
 }
-
 async function saveSettingsProfile() {
     try {
         const data = await apiCall('/api/portfolio');
@@ -640,12 +831,9 @@ async function saveSettingsProfile() {
             method: 'PUT',
             body: JSON.stringify({
                 fullName: p.fullName || currentUser.fullName,
-                course: p.course || "",
-                school: p.school || "",
-                yearLevel: p.yearLevel || "",
+                course: p.course || "", school: p.school || "", yearLevel: p.yearLevel || "",
                 motto: p.motto || "",
-                hobbies: p.hobbies || [],
-                skills: p.skills || [],
+                hobbies: p.hobbies || [], skills: p.skills || [],
                 pronouns: $("setPronouns").value.trim(),
                 gender: $("setGender").value,
                 bio: $("setBio").value.trim()
@@ -655,7 +843,6 @@ async function saveSettingsProfile() {
         renderCompletionBar();
     } catch (e) { toast("danger", "Error", e.message); }
 }
-
 async function changeName() {
     const name = $("setName").value.trim();
     if (!name || name.length < 2) return toast("warn", "Invalid", "Name too short.");
@@ -693,10 +880,7 @@ async function loadAchievements() {
                 <div class="entry">
                     <div style="flex:1;">
                         <small>${escapeHtml(a.date || "No date")} • ${escapeHtml(a.category)}</small>
-                        <h4>
-                            <i class="fas ${categoryIcon(a.category)} ${categoryClass(a.category)}"></i>
-                            ${escapeHtml(a.title)}
-                        </h4>
+                        <h4><i class="fas ${categoryIcon(a.category)} ${categoryClass(a.category)}"></i> ${escapeHtml(a.title)}</h4>
                         ${a.description ? `<p>${escapeHtml(a.description)}</p>` : ""}
                         <div class="chips">
                             ${a.visibility === "private"
@@ -715,7 +899,6 @@ async function loadAchievements() {
         c.innerHTML = emptyState("fa-triangle-exclamation", "Failed to load", e.message);
     }
 }
-
 function openAchievementModal(ach = null) {
     editingAchievementId = ach?._id || null;
     $("achModalTitle").innerText = editingAchievementId ? "Edit Achievement" : "New Achievement";
@@ -730,7 +913,6 @@ function closeAchievementModal() {
     $("achievementBackdrop").style.display = "none";
     editingAchievementId = null;
 }
-
 async function saveAchievement() {
     const title = $("achTitle").value.trim();
     if (!title) return toast("warn", "Missing", "Enter a title.");
@@ -752,13 +934,11 @@ async function saveAchievement() {
         loadAchievements();
     } catch (e) { toast("danger", "Error", e.message); }
 }
-
 async function editAchievement(id) {
     const data = await apiCall('/api/achievements');
     const ach = data.achievements.find(a => a._id === id);
     if (ach) openAchievementModal(ach);
 }
-
 async function deleteAchievement(id) {
     if (!confirm("Delete?")) return;
     await apiCall(`/api/achievements/${id}`, { method: 'DELETE' });
@@ -770,10 +950,7 @@ async function deleteAchievement(id) {
 function previewPostImage(e) {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 3_000_000) {
-        e.target.value = "";
-        return toast("warn", "Too large", "Max 3MB.");
-    }
+    if (file.size > 3_000_000) { e.target.value = ""; return toast("warn", "Too large", "Max 3MB."); }
     const reader = new FileReader();
     reader.onload = () => {
         postImageB64 = reader.result;
@@ -783,7 +960,6 @@ function previewPostImage(e) {
     };
     reader.readAsDataURL(file);
 }
-
 async function createPost() {
     if (!postImageB64) return toast("warn", "No image", "Choose an image first.");
     try {
@@ -803,14 +979,12 @@ async function createPost() {
         loadPosts();
     } catch (e) { toast("danger", "Error", e.message); }
 }
-
 function switchPostsTab(tab) {
     postsTab = tab;
     $("tabFeed").classList.toggle("active", tab === "feed");
     $("tabMine").classList.toggle("active", tab === "mine");
     loadPosts();
 }
-
 async function loadPosts() {
     const c = $("postsContainer");
     c.innerHTML = skeletonList(2);
@@ -869,7 +1043,6 @@ async function loadPosts() {
         c.innerHTML = emptyState("fa-triangle-exclamation", "Failed to load", e.message);
     }
 }
-
 function commentHtml(c, postId) {
     const av = c.author.photo || `https://ui-avatars.com/api/?background=6366f1&color=fff&name=${c.author.name?.[0] || 'U'}`;
     const mine = c.author.id === currentUser.id;
@@ -885,12 +1058,10 @@ function commentHtml(c, postId) {
         </div>
     `;
 }
-
 function focusComment(postId) {
     const inp = $("commentInp-" + postId);
     if (inp) inp.focus();
 }
-
 async function addComment(postId) {
     const inp = $("commentInp-" + postId);
     if (!inp) return;
@@ -907,13 +1078,11 @@ async function addComment(postId) {
             const div = document.createElement("div");
             div.innerHTML = commentHtml(data.comment, postId);
             container.insertBefore(div.firstElementChild, form);
-            // Update count
             const btn = document.querySelector(`#post-${postId} .comment-btn span`);
             if (btn) btn.innerText = parseInt(btn.innerText || 0) + 1;
         }
     } catch (e) { toast("danger", "Error", e.message); }
 }
-
 async function deleteComment(commentId, postId) {
     if (!confirm("Delete this comment?")) return;
     try {
@@ -924,14 +1093,12 @@ async function deleteComment(commentId, postId) {
         if (btn) btn.innerText = Math.max(0, parseInt(btn.innerText || 1) - 1);
     } catch (e) { toast("danger", "Error", e.message); }
 }
-
 async function toggleLike(id) {
     try {
         await apiCall(`/api/posts/${id}/like`, { method: 'POST' });
         loadPosts();
     } catch (e) { toast("danger", "Error", e.message); }
 }
-
 async function deletePost(id) {
     if (!confirm("Delete this photo?")) return;
     try {
@@ -940,7 +1107,6 @@ async function deletePost(id) {
         loadPosts();
     } catch (e) { toast("danger", "Error", e.message); }
 }
-
 async function openPostViewer(id) {
     const endpoint = postsTab === "feed" ? '/api/posts/feed' : '/api/posts/mine';
     const data = await apiCall(endpoint);
@@ -951,9 +1117,7 @@ async function openPostViewer(id) {
     $("postViewerMeta").innerText = `By ${p.author.name} • ${timeAgo(p.createdAt)} • ${p.likes} likes`;
     $("postViewerBackdrop").style.display = "flex";
 }
-function closePostViewer() {
-    $("postViewerBackdrop").style.display = "none";
-}
+function closePostViewer() { $("postViewerBackdrop").style.display = "none"; }
 
 // ==================== FRIENDS ====================
 async function addFriendAction() {
@@ -968,7 +1132,6 @@ async function addFriendAction() {
         loadRequests();
     } catch (e) { toast("danger", "Error", e.message); }
 }
-
 async function loadRequests() {
     const c = $("pendingRequests");
     c.innerHTML = skeletonFriends(1);
@@ -994,7 +1157,6 @@ async function loadRequests() {
         `).join("");
     } catch (e) { console.error(e); }
 }
-
 function updateFriendsBadge(count) {
     const navFriends = $("nav-friends");
     if (!navFriends) return;
@@ -1007,7 +1169,6 @@ function updateFriendsBadge(count) {
         navFriends.appendChild(badge);
     }
 }
-
 async function acceptFriend(fromUserId) {
     await apiCall('/api/friends/accept', {
         method: 'POST', body: JSON.stringify({ fromUserId })
@@ -1016,7 +1177,6 @@ async function acceptFriend(fromUserId) {
     loadRequests();
     loadFriends();
 }
-
 async function loadFriends() {
     const c = $("friendsList");
     c.innerHTML = skeletonFriends(3);
@@ -1051,7 +1211,6 @@ async function loadFriends() {
         $("onlineCount").innerText = `(${online} online)`;
     } catch (e) { console.error(e); }
 }
-
 async function unfriend(id, email) {
     if (!confirm(`Unfriend ${email}?`)) return;
     await apiCall('/api/friends/unfriend', {
@@ -1060,7 +1219,6 @@ async function unfriend(id, email) {
     toast("", "Unfriended", "");
     loadFriends();
 }
-
 async function viewFriendProfile(id) {
     try {
         activeFriendId = id;
@@ -1068,7 +1226,6 @@ async function viewFriendProfile(id) {
         const f = data.friend;
         const p = data.portfolio || {};
         const av = f.photo || `https://ui-avatars.com/api/?background=6366f1&color=fff&name=${f.name?.[0] || 'U'}`;
-
         $("fdPhoto").src = av;
         $("fdName").innerText = f.name;
         $("fdPronouns").innerText = p.pronouns ? `(${p.pronouns})` : "";
@@ -1076,14 +1233,12 @@ async function viewFriendProfile(id) {
         $("fdCourse").innerText = [p.course, p.school, p.yearLevel].filter(Boolean).join(" • ");
         $("fdBio").innerText = p.bio || "";
         $("fdMotto").innerText = p.motto ? `"${p.motto}"` : "";
-
         const meta = [];
         if (p.gender) meta.push(`<span class="chip"><i class="fas fa-user"></i> ${escapeHtml(p.gender)}</span>`);
         if (p.pronouns) meta.push(`<span class="chip"><i class="fas fa-comment"></i> ${escapeHtml(p.pronouns)}</span>`);
         (p.hobbies || []).forEach(h => meta.push(`<span class="chip"><i class="fas fa-heart"></i> ${escapeHtml(h)}</span>`));
         (p.skills || []).forEach(s => meta.push(`<span class="chip"><i class="fas fa-star"></i> ${escapeHtml(s)}</span>`));
         $("fdMeta").innerHTML = meta.join("");
-
         const posts = data.posts || [];
         $("fdPosts").innerHTML = posts.length === 0
             ? emptyState("fa-camera-retro", "No photos yet", "This user hasn't posted anything.")
@@ -1093,7 +1248,6 @@ async function viewFriendProfile(id) {
                     ${x.caption ? `<div class="overlay">${escapeHtml(x.caption)}</div>` : ""}
                 </div>
             `).join("");
-
         const ach = data.achievements || [];
         $("fdAchievements").innerHTML = ach.length === 0
             ? emptyState("fa-trophy", "No public achievements", "This user hasn't shared any achievements.")
@@ -1104,11 +1258,9 @@ async function viewFriendProfile(id) {
                     ${a.description ? `<p>${escapeHtml(a.description)}</p>` : ""}
                 </div>
             `).join("");
-
         showView("friend-detail");
     } catch (e) { toast("danger", "Error", e.message); }
 }
-
 function openFriendPhoto(img, caption) {
     $("postViewerImg").src = img;
     $("postViewerCaption").innerText = caption;
@@ -1131,7 +1283,6 @@ function openChat() {
     if (typingPollInterval) clearInterval(typingPollInterval);
     typingPollInterval = setInterval(checkTyping, 2000);
 }
-
 async function loadChat() {
     if (!activeFriendId) return;
     try {
@@ -1141,20 +1292,15 @@ async function loadChat() {
             c.innerHTML = emptyState("fa-comments", "No messages yet", "Say hi to start the conversation!");
             return;
         }
-        // Get status for read receipts
-        let status = { unreadByThem: 0, lastReadAt: null, lastMessageRead: null };
+        let status = { unreadByThem: 0 };
         try { status = await apiCall(`/api/chat/${activeFriendId}/status`); } catch {}
-
         c.innerHTML = data.messages.map(m => {
             const isMine = m.from === currentUser.id;
             const time = new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
             let readBadge = "";
             if (isMine) {
-                if (status.unreadByThem === 0) {
-                    readBadge = `<div class="msg-read-status read">✓✓ Seen</div>`;
-                } else {
-                    readBadge = `<div class="msg-read-status">✓ Sent</div>`;
-                }
+                if (status.unreadByThem === 0) readBadge = `<div class="msg-read-status read">✓✓ Seen</div>`;
+                else readBadge = `<div class="msg-read-status">✓ Sent</div>`;
             }
             return `<div class="msg-wrap ${isMine ? 'mine' : 'theirs'}">
                 <div class="msg ${isMine ? 'mine' : 'theirs'}">${escapeHtml(m.text)}</div>
@@ -1165,7 +1311,6 @@ async function loadChat() {
         c.scrollTop = c.scrollHeight;
     } catch (e) { console.error(e); }
 }
-
 async function sendMessage() {
     const input = $("chatInput");
     const text = input.value.trim();
@@ -1178,18 +1323,13 @@ async function sendMessage() {
         loadChat();
     } catch (e) { toast("danger", "Error", e.message); }
 }
-
-// ==================== TYPING ====================
 async function notifyTyping() {
     if (!activeFriendId) return;
     const now = Date.now();
     if (now - lastTypingSent < 2000) return;
     lastTypingSent = now;
-    try {
-        await apiCall(`/api/chat/${activeFriendId}/typing`, { method: 'POST' });
-    } catch {}
+    try { await apiCall(`/api/chat/${activeFriendId}/typing`, { method: 'POST' }); } catch {}
 }
-
 async function checkTyping() {
     if (!activeFriendId) return;
     try {
@@ -1200,7 +1340,6 @@ async function checkTyping() {
         else ind.classList.add("hidden");
     } catch {}
 }
-
 async function checkUnreadCount() {
     if (!authToken) return;
     try {
@@ -1225,7 +1364,6 @@ function updateStatusUI() {
     $("myStatusDot").className = "status-dot " + (isOnline ? "online" : "offline");
     $("myStatusText").innerText = isOnline ? "Online" : "Offline";
 }
-
 async function updateOnlineStatus(isOnline) {
     try {
         await apiCall('/api/status/update', {
@@ -1235,14 +1373,12 @@ async function updateOnlineStatus(isOnline) {
         updateStatusUI();
     } catch {}
 }
-
 async function toggleOnlineStatus() {
     if (!currentUser) return;
     const newStatus = currentUser.onlineStatus !== "online";
     await updateOnlineStatus(newStatus);
     toast("", "Status", newStatus ? "Online" : "Offline");
 }
-
 function startHeartbeat() {
     if (heartbeatInterval) clearInterval(heartbeatInterval);
     updateOnlineStatus(true);
@@ -1254,7 +1390,6 @@ function stopHeartbeat() {
     if (heartbeatInterval) { clearInterval(heartbeatInterval); heartbeatInterval = null; }
     if (currentUser) updateOnlineStatus(false);
 }
-
 window.addEventListener("beforeunload", () => {
     if (!currentUser || !authToken) return;
     navigator.sendBeacon("/api/status/update",
@@ -1280,7 +1415,6 @@ async function uploadPhoto(e) {
     };
     reader.readAsDataURL(file);
 }
-
 async function changePassword() {
     const cur = $("curPass").value;
     const nw = $("newPass").value;
@@ -1296,7 +1430,6 @@ async function changePassword() {
         toast("success", "Changed", "Password updated.");
     } catch (e) { toast("danger", "Error", e.message); }
 }
-
 async function wipeMyData() {
     if (!confirm("Delete account permanently?")) return;
     if (!confirm("Are you SURE?")) return;
