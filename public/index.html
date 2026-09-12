@@ -14,6 +14,7 @@
 
   <!-- AUTH -->
   <section id="authSection" class="auth">
+    <div class="auth-aurora"></div>
     <div style="position:absolute; top:20px; right:20px; display:flex; gap:12px; z-index:100;">
       <button class="pillbtn" type="button" onclick="toggleTheme()"><i class="fas fa-moon"></i> Theme</button>
       <button class="pillbtn" type="button" onclick="openAbout()"><i class="fas fa-circle-info"></i> About</button>
@@ -98,7 +99,7 @@
     </div>
   </section>
 
-  <!-- PUBLIC PROFILE (no login) -->
+  <!-- PUBLIC PROFILE -->
   <section id="publicProfileSection" style="display:none;">
     <div class="public-wrap">
       <div id="publicContent">
@@ -147,7 +148,7 @@
 
           <div class="notif-wrap">
             <button class="btn-ghost notif-btn" id="notifBtn" onclick="toggleNotifPanel(event)" title="Notifications">
-              <i class="fas fa-bell"></i>
+              <i class="fas fa-bell" id="notifIcon"></i>
               <span class="notif-badge hidden" id="notifBadge">0</span>
             </button>
             <div class="notif-panel" id="notifPanel">
@@ -179,24 +180,33 @@
 
         <!-- ABOUT ME -->
         <section id="view-profile" class="view">
-          <h1>
+          <h1 class="page-title">
             <i class="fas fa-id-card"></i> About Me
-            <button class="btn-ghost" style="float:right;" onclick="exportProfilePDF()"><i class="fas fa-file-pdf"></i> Export as PDF</button>
+            <button class="btn-ghost no-print" style="float:right;" onclick="exportProfilePDF()"><i class="fas fa-file-pdf"></i> Export as PDF</button>
           </h1>
 
-          <div class="card preview-card" id="profilePreview">
-            <div class="preview-avatar">
+          <!-- 🆕 Profile banner -->
+          <div class="profile-banner-wrap">
+            <div class="profile-banner" id="profileBanner"></div>
+            <div class="profile-banner-avatar">
               <img id="ppAvatar" src="https://ui-avatars.com/api/?background=6366f1&color=fff&name=S" alt="avatar">
             </div>
-            <div class="preview-info">
+          </div>
+
+          <div class="card preview-card" id="profilePreview" style="margin-top:60px;">
+            <div class="preview-info" style="text-align:center; width:100%;">
               <h2 id="ppName">Your Name</h2>
               <p id="ppCourse">Course • School</p>
               <p class="preview-motto" id="ppMotto"></p>
-              <div class="chips" id="ppChips"></div>
+              <div class="chips" id="ppChips" style="justify-content:center;"></div>
+              <div class="chips" style="justify-content:center; margin-top:8px;">
+                <span class="chip" id="ppViewsChip"><i class="fas fa-eye"></i> <b id="ppViews">0</b> profile views</span>
+              </div>
             </div>
             <div class="preview-share no-print">
               <button class="btn-ghost" onclick="screenshotHint()" title="Screenshot me!"><i class="fas fa-camera"></i></button>
               <button class="btn-ghost" onclick="copyPublicLink()" title="Copy public link"><i class="fas fa-link"></i></button>
+              <button class="btn-ghost" onclick="openQRModal()" title="QR code"><i class="fas fa-qrcode"></i></button>
             </div>
           </div>
 
@@ -235,7 +245,7 @@
 
         <!-- PHOTOS -->
         <section id="view-posts" class="hidden view">
-          <h1><i class="fas fa-images"></i> Photos</h1>
+          <h1 class="page-title"><i class="fas fa-images"></i> Photos</h1>
           <div class="card">
             <h3><i class="fas fa-plus"></i> New Post</h3>
             <div class="field">
@@ -265,9 +275,11 @@
           </div>
           <div class="card">
             <h3><i class="fas fa-stream"></i> Feed</h3>
-            <div class="tabs-row">
-              <button class="tab active" id="tabFeed" onclick="switchPostsTab('feed')">Feed</button>
-              <button class="tab" id="tabMine" onclick="switchPostsTab('mine')">My Photos</button>
+            <!-- 🆕 Segmented tabs -->
+            <div class="segmented" role="tablist">
+              <div class="segmented-slider" id="segmentSlider"></div>
+              <button class="segmented-btn active" id="tabFeed" onclick="switchPostsTab('feed')">Feed</button>
+              <button class="segmented-btn" id="tabMine" onclick="switchPostsTab('mine')">My Photos</button>
             </div>
             <div id="postsContainer"></div>
           </div>
@@ -275,13 +287,12 @@
 
         <!-- ALBUMS -->
         <section id="view-albums" class="hidden view">
-          <h1>
+          <h1 class="page-title">
             <i class="fas fa-folder-open"></i> Albums
             <button class="btn-inline" style="float:right;" onclick="openAlbumModal()"><i class="fas fa-plus"></i> New Album</button>
           </h1>
           <div id="albumsGrid" class="album-grid" style="margin-top:16px;"></div>
 
-          <!-- Album detail -->
           <div id="albumDetail" class="hidden" style="margin-top:20px;">
             <button class="btn-ghost" onclick="closeAlbumDetail()"><i class="fas fa-arrow-left"></i> Back to Albums</button>
             <div class="card" style="margin-top:12px;">
@@ -293,7 +304,7 @@
 
         <!-- ACHIEVEMENTS -->
         <section id="view-achievements" class="hidden view">
-          <h1><i class="fas fa-trophy"></i> Achievements</h1>
+          <h1 class="page-title"><i class="fas fa-trophy"></i> Achievements</h1>
           <div class="card">
             <div class="row" style="margin-bottom:12px;">
               <div class="field" style="margin-top:0;">
@@ -316,15 +327,13 @@
 
         <!-- FRIENDS -->
         <section id="view-friends" class="hidden view">
-          <h1><i class="fas fa-users"></i> Friends</h1>
+          <h1 class="page-title"><i class="fas fa-users"></i> Friends</h1>
           <div class="card">
             <h3><i class="fas fa-user-plus"></i> Add a Friend</h3>
             <div class="row">
               <div class="field" style="margin-top:0;"><input id="friendEmail" class="input" placeholder="friend@example.com"></div>
               <div class="field" style="margin-top:0; max-width:150px;">
-                <button class="btn-inline" style="width:100%;" onclick="addFriendAction()">
-                  <i class="fas fa-paper-plane"></i> Send
-                </button>
+                <button class="btn-inline" style="width:100%;" onclick="addFriendAction()"><i class="fas fa-paper-plane"></i> Send</button>
               </div>
             </div>
           </div>
@@ -390,17 +399,17 @@
 
         <!-- STATS -->
         <section id="view-stats" class="hidden view">
-          <h1><i class="fas fa-chart-simple"></i> Stats</h1>
+          <h1 class="page-title"><i class="fas fa-chart-simple"></i> Stats</h1>
           <div class="card">
             <h3><i class="fas fa-user"></i> Your Dashboard</h3>
             <div class="kpi-grid">
-              <div class="kpi-tile"><i class="fas fa-images"></i><div class="kpi-num" id="kpiPosts">0</div><div class="kpi-lbl">Posts</div></div>
-              <div class="kpi-tile"><i class="fas fa-trophy"></i><div class="kpi-num" id="kpiAch">0</div><div class="kpi-lbl">Achievements</div></div>
-              <div class="kpi-tile"><i class="fas fa-users"></i><div class="kpi-num" id="kpiFriends">0</div><div class="kpi-lbl">Friends</div></div>
-              <div class="kpi-tile"><i class="fas fa-heart"></i><div class="kpi-num" id="kpiLikes">0</div><div class="kpi-lbl">Likes received</div></div>
-              <div class="kpi-tile"><i class="fas fa-comment"></i><div class="kpi-num" id="kpiComments">0</div><div class="kpi-lbl">Comments</div></div>
-              <div class="kpi-tile"><i class="fas fa-paper-plane"></i><div class="kpi-num" id="kpiMsgsSent">0</div><div class="kpi-lbl">Messages sent</div></div>
-              <div class="kpi-tile"><i class="fas fa-inbox"></i><div class="kpi-num" id="kpiMsgsRecv">0</div><div class="kpi-lbl">Messages received</div></div>
+              <div class="kpi-tile"><i class="fas fa-images"></i><div class="kpi-num" id="kpiPosts" data-target="0">0</div><div class="kpi-lbl">Posts</div></div>
+              <div class="kpi-tile"><i class="fas fa-trophy"></i><div class="kpi-num" id="kpiAch" data-target="0">0</div><div class="kpi-lbl">Achievements</div></div>
+              <div class="kpi-tile"><i class="fas fa-users"></i><div class="kpi-num" id="kpiFriends" data-target="0">0</div><div class="kpi-lbl">Friends</div></div>
+              <div class="kpi-tile"><i class="fas fa-heart"></i><div class="kpi-num" id="kpiLikes" data-target="0">0</div><div class="kpi-lbl">Likes received</div></div>
+              <div class="kpi-tile"><i class="fas fa-comment"></i><div class="kpi-num" id="kpiComments" data-target="0">0</div><div class="kpi-lbl">Comments</div></div>
+              <div class="kpi-tile"><i class="fas fa-paper-plane"></i><div class="kpi-num" id="kpiMsgsSent" data-target="0">0</div><div class="kpi-lbl">Messages sent</div></div>
+              <div class="kpi-tile"><i class="fas fa-inbox"></i><div class="kpi-num" id="kpiMsgsRecv" data-target="0">0</div><div class="kpi-lbl">Messages received</div></div>
             </div>
           </div>
           <div class="card">
@@ -411,7 +420,7 @@
 
         <!-- ACTIVITY LOG -->
         <section id="view-activity" class="hidden view">
-          <h1><i class="fas fa-clock-rotate-left"></i> Activity</h1>
+          <h1 class="page-title"><i class="fas fa-clock-rotate-left"></i> Activity</h1>
           <div class="card">
             <h3><i class="fas fa-list"></i> Recent activity</h3>
             <div id="activityList"></div>
@@ -420,16 +429,20 @@
 
         <!-- SETTINGS -->
         <section id="view-settings" class="hidden view">
-          <h1><i class="fas fa-gear"></i> Settings</h1>
+          <h1 class="page-title"><i class="fas fa-gear"></i> Settings</h1>
 
           <div class="card" style="text-align:center;">
             <div style="width:120px; height:120px; border-radius:999px; margin:0 auto 14px; overflow:hidden;">
               <img id="userAvatar" style="width:100%; height:100%; object-fit:cover;" src="">
             </div>
             <input type="file" id="fileInp" class="hidden" accept="image/*" onchange="uploadPhoto(event)">
-            <button class="btn-inline" onclick="document.getElementById('fileInp').click()">
-              <i class="fas fa-image"></i> Change Photo
-            </button>
+            <button class="btn-inline" onclick="document.getElementById('fileInp').click()"><i class="fas fa-image"></i> Change Photo</button>
+          </div>
+
+          <!-- 🆕 Banner color -->
+          <div class="card">
+            <h3><i class="fas fa-palette"></i> Profile Banner Color</h3>
+            <div class="banner-color-picker" id="bannerColorPicker"></div>
           </div>
 
           <div class="card">
@@ -455,6 +468,7 @@
             <div class="button-row-center">
               <button class="btn-inline" onclick="changeUsername()"><i class="fas fa-save"></i> Save</button>
               <button class="btn-ghost" onclick="copyPublicLink()"><i class="fas fa-link"></i> Copy Link</button>
+              <button class="btn-ghost" onclick="openQRModal()"><i class="fas fa-qrcode"></i> QR</button>
             </div>
           </div>
 
@@ -546,11 +560,8 @@
         </div>
         <div class="field"><div class="label">Description</div><textarea id="achDesc" class="input" rows="3"></textarea></div>
         <div class="field">
-          <div class="label">
-            <i class="fas fa-lock" style="color:var(--warn);"></i>
-            Note to self (private — only you see this)
-          </div>
-          <textarea id="achPrivateNote" class="input" rows="2" placeholder="e.g. Study harder next time, this is my 3rd time applying..."></textarea>
+          <div class="label"><i class="fas fa-lock" style="color:var(--warn);"></i> Note to self (private — only you see this)</div>
+          <textarea id="achPrivateNote" class="input" rows="2" placeholder="e.g. Study harder next time..."></textarea>
         </div>
       </div>
       <div class="modal-foot">
@@ -597,6 +608,23 @@
     </div>
   </div>
 
+  <!-- 🆕 QR MODAL -->
+  <div class="modal-backdrop" id="qrBackdrop">
+    <div class="modal" style="max-width:420px;">
+      <div class="modal-head">
+        <h3><i class="fas fa-qrcode"></i> Share your profile</h3>
+        <button class="iconbtn" onclick="closeQRModal()"><i class="fas fa-xmark"></i></button>
+      </div>
+      <div class="modal-body" style="text-align:center;">
+        <img id="qrImage" style="width:260px; height:260px; border-radius:14px; border:1px solid var(--border); background:white;" alt="QR">
+        <p class="muted" style="margin-top:12px; font-size:.85rem; word-break:break-all;" id="qrUrl"></p>
+        <div class="button-row-center" style="margin-top:16px;">
+          <button class="btn-inline" onclick="copyPublicLink()"><i class="fas fa-link"></i> Copy Link</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- ABOUT MODAL -->
   <div class="modal-backdrop" id="aboutBackdrop">
     <div class="modal" style="max-width:640px;">
@@ -609,7 +637,7 @@
           <div style="font-weight:900; margin-bottom:6px;">What is this?</div>
           <div class="muted" style="line-height:1.6; font-size:.95rem;">
             <b>Student Portfolio</b> is a personal web app where students can showcase who they are
-            and what they've achieved in one place. ('^' )
+            and what they've achieved in one place. ^⎚‸⎚^
           </div>
         </div>
         <br>
@@ -617,7 +645,7 @@
           <h3 style="margin-bottom:10px;"><i class="fas fa-lightbulb" style="color:var(--primary);"></i> Why I created it</h3>
           <p style="line-height:1.6; font-size:.95rem;">
             I built <b>Student Portfolio</b> because I noticed students have achievements scattered
-            across different platforms. This app brings them all together. ^⎚‸⎚^
+            across different platforms. This app brings them all together. ('^' )
           </p>
         </div>
         <br>
