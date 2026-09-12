@@ -98,6 +98,15 @@
     </div>
   </section>
 
+  <!-- PUBLIC PROFILE (no login) -->
+  <section id="publicProfileSection" style="display:none;">
+    <div class="public-wrap">
+      <div id="publicContent">
+        <p style="text-align:center; padding:40px;">Loading profile...</p>
+      </div>
+    </div>
+  </section>
+
   <!-- APP -->
   <section id="app">
     <div class="drawer-backdrop" id="drawerBackdrop" onclick="closeDrawer()"></div>
@@ -109,6 +118,7 @@
         <div class="nav">
           <a onclick="showView('profile')" id="nav-profile" class="active"><i class="fas fa-id-card"></i> <span>About Me</span></a>
           <a onclick="showView('posts')" id="nav-posts"><i class="fas fa-images"></i> <span>Photos</span></a>
+          <a onclick="showView('albums')" id="nav-albums"><i class="fas fa-folder-open"></i> <span>Albums</span></a>
           <a onclick="showView('achievements')" id="nav-achievements"><i class="fas fa-trophy"></i> <span>Achievements</span></a>
           <a onclick="showView('friends')" id="nav-friends"><i class="fas fa-users"></i> <span>Friends</span></a>
           <a onclick="showView('stats')" id="nav-stats"><i class="fas fa-chart-simple"></i> <span>Stats</span></a>
@@ -169,7 +179,10 @@
 
         <!-- ABOUT ME -->
         <section id="view-profile" class="view">
-          <h1><i class="fas fa-id-card"></i> About Me</h1>
+          <h1>
+            <i class="fas fa-id-card"></i> About Me
+            <button class="btn-ghost" style="float:right;" onclick="exportProfilePDF()"><i class="fas fa-file-pdf"></i> Export as PDF</button>
+          </h1>
 
           <div class="card preview-card" id="profilePreview">
             <div class="preview-avatar">
@@ -181,12 +194,13 @@
               <p class="preview-motto" id="ppMotto"></p>
               <div class="chips" id="ppChips"></div>
             </div>
-            <div class="preview-share">
+            <div class="preview-share no-print">
               <button class="btn-ghost" onclick="screenshotHint()" title="Screenshot me!"><i class="fas fa-camera"></i></button>
+              <button class="btn-ghost" onclick="copyPublicLink()" title="Copy public link"><i class="fas fa-link"></i></button>
             </div>
           </div>
 
-          <div class="card">
+          <div class="card no-print">
             <h3><i class="fas fa-user"></i> Personal Info</h3>
             <div class="row">
               <div class="field"><div class="label">Full Name</div><input id="pName" class="input"></div>
@@ -230,12 +244,20 @@
             </div>
             <img id="postPreview" class="hidden" style="max-width:100%; border-radius:12px; margin-top:10px;">
             <div class="field"><div class="label">Caption</div><input id="postCaption" class="input" placeholder="Say something..."></div>
-            <div class="field">
-              <div class="label">Visibility</div>
-              <select id="postVisibility" class="input">
-                <option value="friends">Friends can see</option>
-                <option value="private">Only me</option>
-              </select>
+            <div class="row">
+              <div class="field">
+                <div class="label">Visibility</div>
+                <select id="postVisibility" class="input">
+                  <option value="friends">Friends can see</option>
+                  <option value="private">Only me</option>
+                </select>
+              </div>
+              <div class="field">
+                <div class="label">Album (optional)</div>
+                <select id="postAlbumSelect" class="input">
+                  <option value="">No album</option>
+                </select>
+              </div>
             </div>
             <div class="button-row-center">
               <button class="btn-inline" onclick="createPost()"><i class="fas fa-paper-plane"></i> Post</button>
@@ -248,6 +270,24 @@
               <button class="tab" id="tabMine" onclick="switchPostsTab('mine')">My Photos</button>
             </div>
             <div id="postsContainer"></div>
+          </div>
+        </section>
+
+        <!-- ALBUMS -->
+        <section id="view-albums" class="hidden view">
+          <h1>
+            <i class="fas fa-folder-open"></i> Albums
+            <button class="btn-inline" style="float:right;" onclick="openAlbumModal()"><i class="fas fa-plus"></i> New Album</button>
+          </h1>
+          <div id="albumsGrid" class="album-grid" style="margin-top:16px;"></div>
+
+          <!-- Album detail -->
+          <div id="albumDetail" class="hidden" style="margin-top:20px;">
+            <button class="btn-ghost" onclick="closeAlbumDetail()"><i class="fas fa-arrow-left"></i> Back to Albums</button>
+            <div class="card" style="margin-top:12px;">
+              <h3 id="albumDetailName">Album</h3>
+              <div id="albumDetailPhotos" class="photo-grid" style="margin-top:12px;"></div>
+            </div>
           </div>
         </section>
 
@@ -351,8 +391,6 @@
         <!-- STATS -->
         <section id="view-stats" class="hidden view">
           <h1><i class="fas fa-chart-simple"></i> Stats</h1>
-
-          <!-- Personal (everyone) -->
           <div class="card">
             <h3><i class="fas fa-user"></i> Your Dashboard</h3>
             <div class="kpi-grid">
@@ -365,34 +403,9 @@
               <div class="kpi-tile"><i class="fas fa-inbox"></i><div class="kpi-num" id="kpiMsgsRecv">0</div><div class="kpi-lbl">Messages received</div></div>
             </div>
           </div>
-
           <div class="card">
             <h3><i class="fas fa-chart-column"></i> Posts per month</h3>
             <canvas id="postsChart" style="width:100%; height:220px;"></canvas>
-          </div>
-
-          <!-- Admin only -->
-          <div class="card hidden" id="adminStatsCard" style="border-left:6px solid var(--danger);">
-            <h3>
-              <i class="fas fa-shield-halved" style="color:var(--danger);"></i>
-              Admin Panel — Site-wide
-              <span class="chip private" style="margin-left:8px; font-size:.7rem;">
-                <i class="fas fa-lock"></i> Restricted
-              </span>
-            </h3>
-            <p class="muted" style="font-size:.85rem; margin-bottom:12px;">
-              Only visible to administrators.
-            </p>
-            <div class="kpi-grid">
-              <div class="kpi-tile"><i class="fas fa-user-group"></i><div class="kpi-num" id="adminUsers">0</div><div class="kpi-lbl">Total users</div></div>
-              <div class="kpi-tile"><i class="fas fa-images"></i><div class="kpi-num" id="adminPosts">0</div><div class="kpi-lbl">Total posts</div></div>
-              <div class="kpi-tile"><i class="fas fa-comments"></i><div class="kpi-num" id="adminMsgs">0</div><div class="kpi-lbl">Messages</div></div>
-              <div class="kpi-tile"><i class="fas fa-trophy"></i><div class="kpi-num" id="adminAch">0</div><div class="kpi-lbl">Achievements</div></div>
-              <div class="kpi-tile"><i class="fas fa-comment-dots"></i><div class="kpi-num" id="adminCmts">0</div><div class="kpi-lbl">Comments</div></div>
-              <div class="kpi-tile"><i class="fas fa-bell"></i><div class="kpi-num" id="adminNotifs">0</div><div class="kpi-lbl">Notifications</div></div>
-              <div class="kpi-tile"><i class="fas fa-circle" style="color:var(--success);"></i><div class="kpi-num" id="adminOnline">0</div><div class="kpi-lbl">Online now</div></div>
-              <div class="kpi-tile"><i class="fas fa-clock"></i><div class="kpi-num" id="adminUptime">0</div><div class="kpi-lbl">Uptime (h)</div></div>
-            </div>
           </div>
         </section>
 
@@ -427,6 +440,21 @@
             </div>
             <div class="button-row-center">
               <button class="btn-inline" onclick="changeName()"><i class="fas fa-save"></i> Save</button>
+            </div>
+          </div>
+
+          <div class="card">
+            <h3><i class="fas fa-at"></i> Public Username</h3>
+            <p class="muted" style="font-size:.85rem; margin-bottom:8px;">
+              Your public link: <b id="publicLinkPreview">—</b>
+            </p>
+            <div class="field">
+              <div class="label">Username (a-z, 0-9, _)</div>
+              <input id="setUsername" class="input" placeholder="archie123">
+            </div>
+            <div class="button-row-center">
+              <button class="btn-inline" onclick="changeUsername()"><i class="fas fa-save"></i> Save</button>
+              <button class="btn-ghost" onclick="copyPublicLink()"><i class="fas fa-link"></i> Copy Link</button>
             </div>
           </div>
 
@@ -517,10 +545,39 @@
           </select>
         </div>
         <div class="field"><div class="label">Description</div><textarea id="achDesc" class="input" rows="3"></textarea></div>
+        <div class="field">
+          <div class="label">
+            <i class="fas fa-lock" style="color:var(--warn);"></i>
+            Note to self (private — only you see this)
+          </div>
+          <textarea id="achPrivateNote" class="input" rows="2" placeholder="e.g. Study harder next time, this is my 3rd time applying..."></textarea>
+        </div>
       </div>
       <div class="modal-foot">
         <button class="btn-ghost" onclick="closeAchievementModal()">Cancel</button>
         <button class="btn-inline" onclick="saveAchievement()">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ALBUM MODAL -->
+  <div class="modal-backdrop" id="albumBackdrop">
+    <div class="modal" style="max-width:480px;">
+      <div class="modal-head">
+        <h3 id="albumModalTitle">New Album</h3>
+        <button class="iconbtn" onclick="closeAlbumModal()"><i class="fas fa-xmark"></i></button>
+      </div>
+      <div class="modal-body">
+        <div class="field"><div class="label">Album Name</div><input id="albumName" class="input" placeholder="e.g. Travel 2026"></div>
+        <div class="field">
+          <div class="label">Cover Image (optional)</div>
+          <input type="file" id="albumCoverInput" class="input" accept="image/*" onchange="previewAlbumCover(event)">
+        </div>
+        <img id="albumCoverPreview" class="hidden" style="max-width:100%; border-radius:12px; margin-top:10px;">
+      </div>
+      <div class="modal-foot">
+        <button class="btn-ghost" onclick="closeAlbumModal()">Cancel</button>
+        <button class="btn-inline" onclick="saveAlbum()">Save</button>
       </div>
     </div>
   </div>
@@ -552,7 +609,7 @@
           <div style="font-weight:900; margin-bottom:6px;">What is this?</div>
           <div class="muted" style="line-height:1.6; font-size:.95rem;">
             <b>Student Portfolio</b> is a personal web app where students can showcase who they are
-            and what they've achieved in one place.
+            and what they've achieved in one place. ('^' )
           </div>
         </div>
         <br>
@@ -560,7 +617,7 @@
           <h3 style="margin-bottom:10px;"><i class="fas fa-lightbulb" style="color:var(--primary);"></i> Why I created it</h3>
           <p style="line-height:1.6; font-size:.95rem;">
             I built <b>Student Portfolio</b> because I noticed students have achievements scattered
-            across different platforms. This app brings them all together.
+            across different platforms. This app brings them all together. ^⎚‸⎚^
           </p>
         </div>
         <br>
