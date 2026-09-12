@@ -1,5 +1,8 @@
 /* ============================================================
-   STUDENT PORTFOLIO — Complete System with Tab Animations
+   STUDENT PORTFOLIO — Batch 1
+   Includes: badge, completion bar, category icons, skeletons,
+   empty states, preview card, session warning, password meter,
+   pull to refresh, PWA
    ============================================================ */
 
 const API_URL = '';
@@ -13,8 +16,7 @@ let chatPollInterval = null;
 let postsTab = 'feed';
 let captchaCode = "";
 let postImageB64 = null;
-
-// View order for directional animation
+let sessionWarnTimeout = null;
 const VIEW_ORDER = ["profile", "posts", "achievements", "friends", "settings", "friend-detail", "chat"];
 
 // ==================== HELPERS ====================
@@ -41,6 +43,234 @@ function toast(type, title, msg) {
         <button class="x" onclick="this.parentElement.remove()">✕</button>`;
     wrap.appendChild(el);
     setTimeout(() => el.remove(), 4500);
+}
+
+// ==================== SKELETONS ====================
+function skeletonList(count = 2) {
+    let html = '';
+    for (let i = 0; i < count; i++) {
+        html += `
+            <div class="skeleton-card">
+                <div class="skeleton skeleton-line short"></div>
+                <div class="skeleton skeleton-line medium"></div>
+                <div class="skeleton skeleton-line"></div>
+                <div class="skeleton skeleton-image"></div>
+            </div>
+        `;
+    }
+    return html;
+}
+function skeletonFriends(count = 3) {
+    let html = '';
+    for (let i = 0; i < count; i++) {
+        html += `
+            <div class="skeleton-card" style="display:flex; gap:12px; align-items:center;">
+                <div class="skeleton skeleton-avatar"></div>
+                <div style="flex:1;">
+                    <div class="skeleton skeleton-line short"></div>
+                    <div class="skeleton skeleton-line medium"></div>
+                </div>
+            </div>
+        `;
+    }
+    return html;
+}
+
+// ==================== EMPTY STATES ====================
+function emptyState(icon, title, text, actionHtml = "") {
+    return `
+        <div class="empty">
+            <div class="empty-illustration"><i class="fas ${icon}"></i></div>
+            <div class="empty-title">${escapeHtml(title)}</div>
+            <div class="empty-text">${escapeHtml(text)}</div>
+            ${actionHtml ? `<div class="empty-action">${actionHtml}</div>` : ""}
+        </div>
+    `;
+}
+
+// ==================== ACHIEVEMENT CATEGORY ICONS ====================
+function categoryIcon(cat) {
+    const map = {
+        "Academic": "fa-graduation-cap",
+        "Sports": "fa-medal",
+        "Leadership": "fa-crown",
+        "Personal": "fa-heart",
+        "Other": "fa-star"
+    };
+    return map[cat] || "fa-trophy";
+}
+function categoryClass(cat) {
+    return "ach-cat-" + (cat || "other").toLowerCase();
+}
+
+// ==================== PROFILE COMPLETION ====================
+function computeCompletion(p, photo) {
+    const fields = [
+        { key: "fullName", label: "Full name", value: p.fullName },
+        { key: "course", label: "Course", value: p.course },
+        { key: "school", label: "School", value: p.school },
+        { key: "yearLevel", label: "Year level", value: p.yearLevel },
+        { key: "bio", label: "Bio", value: p.bio },
+        { key: "motto", label: "Motto", value: p.motto },
+        { key: "pronouns", label: "Pronouns", value: p.pronouns },
+        { key: "gender", label: "Gender", value: p.gender },
+        { key: "hobbies", label: "Hobbies", value: (p.hobbies || []).length ? "yes" : "" },
+        { key: "skills", label: "Skills", value: (p.skills || []).length ? "yes" : "" },
+        { key: "photo", label: "Profile photo", value: photo }
+    ];
+    const done = fields.filter(f => f.value && String(f.value).trim());
+    const pct = Math.round((done.length / fields.length) * 100);
+    const missing = fields.filter(f => !f.value || !String(f.value).trim()).map(f => f.label);
+    return { pct, missing };
+}
+
+async function renderCompletionBar() {
+    try {
+        const data = await apiCall('/api/portfolio');
+        const p = data.portfolio || {};
+        const { pct, missing } = computeCompletion(p, currentUser?.photo);
+        const wrap = $("completionBarWrap");
+        if (!wrap) return;
+        if (pct >= 100) {
+            wrap.innerHTML = `
+                <div class="completion-card" style="border-left:4px solid var(--success);">
+                    <div class="completion-head">
+                        <span><i class="fas fa-check-circle" style="color:var(--success);"></i> Profile complete!</span>
+                        <span style="color:var(--success);">100%</span>
+                    </div>
+                </div>
+            `;
+            return;
+        }
+        wrap.innerHTML = `
+            <div class="completion-card">
+                <div class="completion-head">
+                    <span><i class="fas fa-user-circle" style="color:var(--primary);"></i> Profile ${pct}% complete</span>
+                    <span style="color:var(--primary);">${pct}%</span>
+                </div>
+                <div class="completion-bar"><div class="completion-fill" style="width:${pct}%"></div></div>
+                <div class="completion-tip">Missing: ${escapeHtml(missing.slice(0, 3).join(", "))}${missing.length > 3 ? "…" : ""}</div>
+            </div>
+        `;
+    } catch (e) { /* silent */ }
+}
+
+// ==================== PREVIEW CARD ====================
+async function renderPreviewCard() {
+    try {
+        const data = await apiCall('/api/portfolio');
+        const p = data.portfolio || {};
+        const av = currentUser?.photo || `https://ui-avatars.com/api/?background=6366f1&color=fff&name=${encodeURIComponent(currentUser?.fullName || "S")}`;
+        if ($("ppAvatar")) $("ppAvatar").src = av;
+        if ($("ppName")) $("ppName").innerText = p.fullName || currentUser?.fullName || "Your Name";
+        if ($("ppCourse")) {
+            const line = [p.course, p.school, p.yearLevel].filter(Boolean).join(" • ");
+            $("ppCourse").innerText = line || "Course • School • Year";
+        }
+        if ($("ppMotto")) $("ppMotto").innerText = p.motto ? `"${p.motto}"` : "";
+        if ($("ppChips")) {
+            const chips = [];
+            (p.hobbies || []).slice(0, 2).forEach(h => chips.push(`<span class="chip"><i class="fas fa-heart"></i> ${escapeHtml(h)}</span>`));
+            (p.skills || []).slice(0, 3).forEach(s => chips.push(`<span class="chip"><i class="fas fa-star"></i> ${escapeHtml(s)}</span>`));
+            $("ppChips").innerHTML = chips.join("");
+        }
+    } catch (e) { /* silent */ }
+}
+
+function screenshotHint() {
+    toast("info", "Tip", "Take a screenshot to share your card on LinkedIn or résumé!");
+}
+
+// ==================== PASSWORD STRENGTH ====================
+function updatePasswordStrength(pw) {
+    const meter = $("pwMeter");
+    const bar = $("pwBar");
+    const label = $("pwLabel");
+    if (!meter || !bar || !label) return;
+    if (!pw) { bar.style.width = "0"; label.innerText = ""; return; }
+
+    let score = 0;
+    if (pw.length >= 6) score++;
+    if (pw.length >= 10) score++;
+    if (/[A-Z]/.test(pw)) score++;
+    if (/[0-9]/.test(pw)) score++;
+    if (/[^A-Za-z0-9]/.test(pw)) score++;
+
+    let width = "0%", color = "var(--danger)", text = "Weak";
+    if (score <= 1) { width = "25%"; color = "var(--danger)"; text = "Weak"; }
+    else if (score === 2) { width = "50%"; color = "var(--warn)"; text = "Fair"; }
+    else if (score === 3) { width = "70%"; color = "#84cc16"; text = "Good"; }
+    else if (score === 4) { width = "85%"; color = "var(--success)"; text = "Strong"; }
+    else { width = "100%"; color = "var(--success)"; text = "Very strong"; }
+
+    bar.style.width = width;
+    bar.style.background = color;
+    label.innerText = text;
+    label.style.color = color;
+}
+
+// ==================== SESSION WARNING ====================
+function scheduleSessionWarning() {
+    if (sessionWarnTimeout) clearTimeout(sessionWarnTimeout);
+    if (!authToken) return;
+    // JWT is 7 days; warn at 6 days 23 hours
+    const WARN_AT = 7 * 24 * 60 * 60 * 1000 - 60 * 60 * 1000;
+    sessionWarnTimeout = setTimeout(() => {
+        if ($("sessionWarnBackdrop")) $("sessionWarnBackdrop").style.display = "flex";
+    }, WARN_AT);
+}
+function extendSession() {
+    if ($("sessionWarnBackdrop")) $("sessionWarnBackdrop").style.display = "none";
+    // In real app, call refresh endpoint. For now just re-schedule.
+    scheduleSessionWarning();
+    updateOnlineStatus(true);
+    toast("success", "Extended", "You're still logged in.");
+}
+
+// ==================== PULL TO REFRESH ====================
+function setupPullToRefresh() {
+    const main = $("mainScroll");
+    const ind = $("pullIndicator");
+    if (!main || !ind) return;
+    let startY = 0, pulling = false, distance = 0;
+    const THRESHOLD = 70;
+
+    main.addEventListener("touchstart", (e) => {
+        if (main.scrollTop === 0) {
+            startY = e.touches[0].clientY;
+            pulling = true;
+        }
+    }, { passive: true });
+
+    main.addEventListener("touchmove", (e) => {
+        if (!pulling) return;
+        distance = e.touches[0].clientY - startY;
+        if (distance > 10) {
+            ind.classList.add("show");
+            if (distance > THRESHOLD) ind.classList.add("ready");
+            else ind.classList.remove("ready");
+        }
+    }, { passive: true });
+
+    main.addEventListener("touchend", async () => {
+        if (!pulling) return;
+        ind.classList.remove("ready");
+        if (distance > THRESHOLD) {
+            ind.querySelector("span").innerText = "Refreshing…";
+            const activeNav = document.querySelector(".nav a.active");
+            const view = activeNav?.id?.replace("nav-", "") || "profile";
+            if (view === "profile") { await loadProfile(); await renderPreviewCard(); }
+            if (view === "posts") await loadPosts();
+            if (view === "achievements") await loadAchievements();
+            if (view === "friends") { await loadFriends(); await loadRequests(); }
+            await renderCompletionBar();
+            toast("success", "Refreshed", "Latest data loaded.");
+        }
+        ind.querySelector("span").innerText = "Pull to refresh";
+        ind.classList.remove("show");
+        pulling = false;
+        distance = 0;
+    });
 }
 
 // ==================== API ====================
@@ -126,6 +356,7 @@ function logout() {
     if (!confirm("Log out?")) return;
     stopHeartbeat();
     if (chatPollInterval) clearInterval(chatPollInterval);
+    if (sessionWarnTimeout) clearTimeout(sessionWarnTimeout);
     localStorage.removeItem('sp_token');
     localStorage.removeItem('sp_user');
     location.reload();
@@ -195,6 +426,10 @@ async function initApp() {
     startHeartbeat();
     checkUnreadCount();
     setInterval(checkUnreadCount, 15000);
+    scheduleSessionWarning();
+    setupPullToRefresh();
+    renderCompletionBar();
+    renderPreviewCard();
 }
 
 function hydrateTopBar() {
@@ -208,9 +443,8 @@ function hydrateTopBar() {
     $("setName").value = currentUser.fullName;
 }
 
-// ==================== NAVIGATION (WITH ANIMATIONS) ====================
+// ==================== NAVIGATION ====================
 function showView(v) {
-    // Determine current view index for directional animation
     const currentIdx = VIEW_ORDER.findIndex(id => {
         const el = $("view-" + id);
         return el && !el.classList.contains("hidden");
@@ -218,7 +452,6 @@ function showView(v) {
     const nextIdx = VIEW_ORDER.indexOf(v);
     const goRight = nextIdx >= currentIdx;
 
-    // Hide all views and clear previous animation classes
     VIEW_ORDER.forEach(id => {
         const el = $("view-" + id);
         if (el) {
@@ -227,31 +460,23 @@ function showView(v) {
         }
     });
 
-    // Show target view with directional animation
     const target = $("view-" + v);
     if (target) {
         target.classList.remove("hidden");
-        // Force reflow so animation replays even on same view
         void target.offsetWidth;
         target.classList.add(goRight ? "view-enter-right" : "view-enter-left");
-        setTimeout(() => {
-            target.classList.remove("view-enter-right", "view-enter-left");
-        }, 500);
-
-        // Smooth scroll to top
+        setTimeout(() => target.classList.remove("view-enter-right", "view-enter-left"), 500);
         const main = document.querySelector(".main");
         if (main) main.scrollTo({ top: 0, behavior: "smooth" });
     }
 
-    // Update active nav
     document.querySelectorAll(".nav a").forEach(a => a.classList.remove("active"));
     const nav = $("nav-" + v);
     if (nav) nav.classList.add("active");
 
     if (window.innerWidth <= 820) closeDrawer();
 
-    // Load data per view
-    if (v === "profile") { loadProfile(); loadSettingsProfile(); }
+    if (v === "profile") { loadProfile(); loadSettingsProfile(); renderPreviewCard(); renderCompletionBar(); }
     if (v === "posts") loadPosts();
     if (v === "achievements") loadAchievements();
     if (v === "friends") { loadFriends(); loadRequests(); }
@@ -308,6 +533,8 @@ async function saveProfile() {
             })
         });
         toast("success", "Saved", "Profile updated.");
+        renderCompletionBar();
+        renderPreviewCard();
     } catch (e) { toast("danger", "Error", e.message); }
 }
 
@@ -341,6 +568,7 @@ async function saveSettingsProfile() {
             })
         });
         toast("success", "Saved", "Profile updated.");
+        renderCompletionBar();
     } catch (e) { toast("danger", "Error", e.message); }
 }
 
@@ -360,19 +588,31 @@ async function changeName() {
 
 // ==================== ACHIEVEMENTS ====================
 async function loadAchievements() {
+    const c = $("achievementsList");
+    c.innerHTML = skeletonList(2);
     try {
         const data = await apiCall('/api/achievements');
         const filter = $("achFilter").value;
         let list = data.achievements || [];
         if (filter) list = list.filter(a => a.category === filter);
-        const c = $("achievementsList");
-        if (list.length === 0) { c.innerHTML = '<p class="empty">No achievements yet.</p>'; return; }
+        if (list.length === 0) {
+            c.innerHTML = emptyState(
+                "fa-trophy",
+                filter ? "No matches" : "No achievements yet",
+                filter ? "Try a different category." : "Add your first achievement — scholarships, awards, anything you're proud of!",
+                `<button class="btn-inline" onclick="openAchievementModal()"><i class="fas fa-plus"></i> Add Achievement</button>`
+            );
+            return;
+        }
         c.innerHTML = list.map(a => `
             <div class="card" style="border-left:4px solid var(--primary); margin-bottom:10px;">
                 <div class="entry">
                     <div style="flex:1;">
                         <small>${escapeHtml(a.date || "No date")} • ${escapeHtml(a.category)}</small>
-                        <h4><i class="fas fa-trophy" style="color:var(--primary);"></i> ${escapeHtml(a.title)}</h4>
+                        <h4>
+                            <i class="fas ${categoryIcon(a.category)} ${categoryClass(a.category)}"></i>
+                            ${escapeHtml(a.title)}
+                        </h4>
                         ${a.description ? `<p>${escapeHtml(a.description)}</p>` : ""}
                         <div class="chips">
                             ${a.visibility === "private"
@@ -387,7 +627,9 @@ async function loadAchievements() {
                 </div>
             </div>
         `).join("");
-    } catch (e) { toast("danger", "Error", "Load failed"); }
+    } catch (e) {
+        c.innerHTML = emptyState("fa-triangle-exclamation", "Failed to load", e.message);
+    }
 }
 
 function openAchievementModal(ach = null) {
@@ -486,13 +728,19 @@ function switchPostsTab(tab) {
 }
 
 async function loadPosts() {
+    const c = $("postsContainer");
+    c.innerHTML = skeletonList(2);
     try {
         const endpoint = postsTab === "feed" ? '/api/posts/feed' : '/api/posts/mine';
         const data = await apiCall(endpoint);
-        const c = $("postsContainer");
         const posts = data.posts || [];
         if (posts.length === 0) {
-            c.innerHTML = '<p class="empty">No photos yet.</p>';
+            c.innerHTML = emptyState(
+                "fa-camera-retro",
+                postsTab === "feed" ? "Feed is empty" : "No photos yet",
+                postsTab === "feed" ? "Add friends or post your first photo to get started!" : "Share your first memory!",
+                postsTab === "mine" ? `<button class="btn-inline" onclick="document.getElementById('postImageInput').click()"><i class="fas fa-plus"></i> Post a photo</button>` : ""
+            );
             return;
         }
         c.innerHTML = posts.map(p => {
@@ -522,7 +770,9 @@ async function loadPosts() {
                 </div>
             `;
         }).join("");
-    } catch (e) { toast("danger", "Error", "Load failed"); }
+    } catch (e) {
+        c.innerHTML = emptyState("fa-triangle-exclamation", "Failed to load", e.message);
+    }
 }
 
 async function toggleLike(id) {
@@ -565,17 +815,22 @@ async function addFriendAction() {
         });
         $("friendEmail").value = "";
         toast("success", "Sent", `Request sent`);
+        loadRequests();
     } catch (e) { toast("danger", "Error", e.message); }
 }
 
 async function loadRequests() {
+    const c = $("pendingRequests");
+    c.innerHTML = skeletonFriends(1);
     try {
         const data = await apiCall('/api/friends/requests');
-        const c = $("pendingRequests");
         if (!data.requests?.length) {
-            c.innerHTML = '<p class="muted" style="text-align:center;">No pending requests.</p>';
+            c.innerHTML = emptyState("fa-bell-slash", "No pending requests", "You're all caught up!");
+            // Update Friends nav badge
+            updateFriendsBadge(0);
             return;
         }
+        updateFriendsBadge(data.requests.length);
         c.innerHTML = data.requests.map(r => `
             <div class="friend-item">
                 <div class="friend-info">
@@ -591,6 +846,19 @@ async function loadRequests() {
     } catch (e) { console.error(e); }
 }
 
+function updateFriendsBadge(count) {
+    const navFriends = $("nav-friends");
+    if (!navFriends) return;
+    const existing = navFriends.querySelector(".badge");
+    if (existing) existing.remove();
+    if (count > 0) {
+        const badge = document.createElement("span");
+        badge.className = "badge";
+        badge.innerText = count;
+        navFriends.appendChild(badge);
+    }
+}
+
 async function acceptFriend(fromUserId) {
     await apiCall('/api/friends/accept', {
         method: 'POST', body: JSON.stringify({ fromUserId })
@@ -601,11 +869,17 @@ async function acceptFriend(fromUserId) {
 }
 
 async function loadFriends() {
+    const c = $("friendsList");
+    c.innerHTML = skeletonFriends(3);
     try {
         const data = await apiCall('/api/friends/list');
-        const c = $("friendsList");
         if (!data.friends?.length) {
-            c.innerHTML = '<p class="muted" style="text-align:center;">No friends yet.</p>';
+            c.innerHTML = emptyState(
+                "fa-user-friends",
+                "No friends yet",
+                "Add your first friend by their email above.",
+                ""
+            );
             $("onlineCount").innerText = "";
             return;
         }
@@ -668,7 +942,7 @@ async function viewFriendProfile(id) {
 
         const posts = data.posts || [];
         $("fdPosts").innerHTML = posts.length === 0
-            ? '<p class="muted">No photos yet.</p>'
+            ? emptyState("fa-camera-retro", "No photos yet", "This user hasn't posted anything.")
             : posts.map(x => `
                 <div class="photo-tile" onclick="openFriendPhoto('${x.image}','${escapeHtml(x.caption || "")}')">
                     <img src="${x.image}">
@@ -678,11 +952,11 @@ async function viewFriendProfile(id) {
 
         const ach = data.achievements || [];
         $("fdAchievements").innerHTML = ach.length === 0
-            ? '<p class="muted">No public achievements yet.</p>'
+            ? emptyState("fa-trophy", "No public achievements", "This user hasn't shared any achievements.")
             : ach.map(a => `
                 <div class="card" style="border-left:4px solid var(--primary); margin-bottom:10px;">
                     <small>${escapeHtml(a.date || "")} • ${escapeHtml(a.category)}</small>
-                    <h4><i class="fas fa-trophy" style="color:var(--primary);"></i> ${escapeHtml(a.title)}</h4>
+                    <h4><i class="fas ${categoryIcon(a.category)} ${categoryClass(a.category)}"></i> ${escapeHtml(a.title)}</h4>
                     ${a.description ? `<p>${escapeHtml(a.description)}</p>` : ""}
                 </div>
             `).join("");
@@ -718,7 +992,7 @@ async function loadChat() {
         const data = await apiCall(`/api/chat/${activeFriendId}`);
         const c = $("chatMessages");
         if (!data.messages?.length) {
-            c.innerHTML = '<p class="muted" style="text-align:center;">No messages yet. Say hi!</p>';
+            c.innerHTML = emptyState("fa-comments", "No messages yet", "Say hi to start the conversation!");
             return;
         }
         c.innerHTML = data.messages.map(m => {
@@ -818,6 +1092,8 @@ async function uploadPhoto(e) {
         currentUser.photo = reader.result;
         localStorage.setItem('sp_user', JSON.stringify(currentUser));
         hydrateTopBar();
+        renderCompletionBar();
+        renderPreviewCard();
         toast("success", "Updated", "Photo changed.");
     };
     reader.readAsDataURL(file);
@@ -834,6 +1110,7 @@ async function changePassword() {
         });
         $("curPass").value = "";
         $("newPass").value = "";
+        updatePasswordStrength("");
         toast("success", "Changed", "Password updated.");
     } catch (e) { toast("danger", "Error", e.message); }
 }
