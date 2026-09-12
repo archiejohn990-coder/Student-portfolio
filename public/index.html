@@ -111,6 +111,8 @@
           <a onclick="showView('posts')" id="nav-posts"><i class="fas fa-images"></i> <span>Photos</span></a>
           <a onclick="showView('achievements')" id="nav-achievements"><i class="fas fa-trophy"></i> <span>Achievements</span></a>
           <a onclick="showView('friends')" id="nav-friends"><i class="fas fa-users"></i> <span>Friends</span></a>
+          <a onclick="showView('stats')" id="nav-stats"><i class="fas fa-chart-simple"></i> <span>Stats</span></a>
+          <a onclick="showView('activity')" id="nav-activity"><i class="fas fa-clock-rotate-left"></i> <span>Activity</span></a>
           <a onclick="showView('settings')" id="nav-settings"><i class="fas fa-gear"></i> <span>Settings</span></a>
         </div>
         <div class="spacer"></div>
@@ -120,11 +122,20 @@
       <main class="main" id="mainScroll">
         <div class="topbar">
           <button class="hamburger" onclick="toggleDrawer()"><i class="fas fa-bars"></i> Menu</button>
+
+          <!-- 🔍 Search -->
+          <div class="search-wrap">
+            <i class="fas fa-search search-icon"></i>
+            <input class="input search-input" id="globalSearch" placeholder="Search people, posts, achievements..." oninput="onSearchInput()" onfocus="onSearchFocus()">
+            <div class="search-results" id="searchResults">
+              <p class="muted" style="text-align:center; padding:16px;">Type to search...</p>
+            </div>
+          </div>
+
           <div style="flex:1;"></div>
           <button class="btn-ghost" onclick="toggleTheme()"><i class="fas fa-circle-half-stroke"></i></button>
           <button class="btn-ghost" onclick="openAbout()"><i class="fas fa-circle-info"></i> About</button>
 
-          <!-- 🔔 Notifications bell -->
           <div class="notif-wrap">
             <button class="btn-ghost notif-btn" id="notifBtn" onclick="toggleNotifPanel(event)" title="Notifications">
               <i class="fas fa-bell"></i>
@@ -338,6 +349,54 @@
           </div>
         </section>
 
+        <!-- STATS -->
+        <section id="view-stats" class="hidden view">
+          <h1><i class="fas fa-chart-simple"></i> Stats</h1>
+
+          <div class="card">
+            <h3><i class="fas fa-user"></i> Your Dashboard</h3>
+            <div class="kpi-grid">
+              <div class="kpi-tile"><i class="fas fa-images"></i><div class="kpi-num" id="kpiPosts">0</div><div class="kpi-lbl">Posts</div></div>
+              <div class="kpi-tile"><i class="fas fa-trophy"></i><div class="kpi-num" id="kpiAch">0</div><div class="kpi-lbl">Achievements</div></div>
+              <div class="kpi-tile"><i class="fas fa-users"></i><div class="kpi-num" id="kpiFriends">0</div><div class="kpi-lbl">Friends</div></div>
+              <div class="kpi-tile"><i class="fas fa-heart"></i><div class="kpi-num" id="kpiLikes">0</div><div class="kpi-lbl">Likes received</div></div>
+              <div class="kpi-tile"><i class="fas fa-comment"></i><div class="kpi-num" id="kpiComments">0</div><div class="kpi-lbl">Comments</div></div>
+              <div class="kpi-tile"><i class="fas fa-paper-plane"></i><div class="kpi-num" id="kpiMsgsSent">0</div><div class="kpi-lbl">Messages sent</div></div>
+              <div class="kpi-tile"><i class="fas fa-inbox"></i><div class="kpi-num" id="kpiMsgsRecv">0</div><div class="kpi-lbl">Messages received</div></div>
+              <div class="kpi-tile"><i class="fas fa-fire"></i><div class="kpi-num" id="kpiUptime">0</div><div class="kpi-lbl">Server uptime (h)</div></div>
+            </div>
+          </div>
+
+          <div class="card">
+            <h3><i class="fas fa-chart-column"></i> Posts per month</h3>
+            <canvas id="postsChart" style="width:100%; height:220px;"></canvas>
+          </div>
+
+          <!-- Admin stats (only visible to admins) -->
+          <div class="card hidden" id="adminStatsCard">
+            <h3><i class="fas fa-shield-halved"></i> Admin — Site-wide</h3>
+            <div class="kpi-grid">
+              <div class="kpi-tile"><i class="fas fa-user-group"></i><div class="kpi-num" id="adminUsers">0</div><div class="kpi-lbl">Total users</div></div>
+              <div class="kpi-tile"><i class="fas fa-images"></i><div class="kpi-num" id="adminPosts">0</div><div class="kpi-lbl">Total posts</div></div>
+              <div class="kpi-tile"><i class="fas fa-comments"></i><div class="kpi-num" id="adminMsgs">0</div><div class="kpi-lbl">Messages</div></div>
+              <div class="kpi-tile"><i class="fas fa-trophy"></i><div class="kpi-num" id="adminAch">0</div><div class="kpi-lbl">Achievements</div></div>
+              <div class="kpi-tile"><i class="fas fa-comment-dots"></i><div class="kpi-num" id="adminCmts">0</div><div class="kpi-lbl">Comments</div></div>
+              <div class="kpi-tile"><i class="fas fa-bell"></i><div class="kpi-num" id="adminNotifs">0</div><div class="kpi-lbl">Notifications</div></div>
+              <div class="kpi-tile"><i class="fas fa-circle" style="color:var(--success);"></i><div class="kpi-num" id="adminOnline">0</div><div class="kpi-lbl">Online now</div></div>
+              <div class="kpi-tile"><i class="fas fa-clock"></i><div class="kpi-num" id="adminUptime">0</div><div class="kpi-lbl">Uptime (h)</div></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ACTIVITY LOG -->
+        <section id="view-activity" class="hidden view">
+          <h1><i class="fas fa-clock-rotate-left"></i> Activity</h1>
+          <div class="card">
+            <h3><i class="fas fa-list"></i> Recent activity</h3>
+            <div id="activityList"></div>
+          </div>
+        </section>
+
         <!-- SETTINGS -->
         <section id="view-settings" class="hidden view">
           <h1><i class="fas fa-gear"></i> Settings</h1>
@@ -388,9 +447,7 @@
             <div class="field">
               <div class="label">New Password</div>
               <input type="password" id="newPass" class="input" oninput="updatePasswordStrength(this.value)">
-              <div class="pw-meter" id="pwMeter">
-                <div class="pw-bar" id="pwBar"></div>
-              </div>
+              <div class="pw-meter" id="pwMeter"><div class="pw-bar" id="pwBar"></div></div>
               <div class="pw-label" id="pwLabel"></div>
             </div>
             <div class="button-row-center">
@@ -487,69 +544,38 @@
           <div style="font-weight:900; margin-bottom:6px;">What is this?</div>
           <div class="muted" style="line-height:1.6; font-size:.95rem;">
             <b>Student Portfolio</b> is a personal web app where students can showcase who they are
-            and what they've achieved in one place. Add your profile, post photos, track achievements,
-            connect with friends, and chat. Built to be a digital identity students can be proud of. ('^' )
+            and what they've achieved in one place.
           </div>
         </div>
-
         <br>
-
         <div class="card notice" style="background:var(--border); border:none;">
           <h3 style="margin-bottom:10px;"><i class="fas fa-lightbulb" style="color:var(--primary);"></i> Why I created it</h3>
           <p style="line-height:1.6; font-size:.95rem;">
             I built <b>Student Portfolio</b> because I noticed students have achievements scattered
-            across different platforms certificates on paper, photos in camera rolls, awards posted
-            on Facebook, and notes forgotten in notebooks. There was no single place to present
-            everything professionally. ^⎚‸⎚^
-          </p>
-          <p style="line-height:1.6; font-size:.95rem; margin-top:10px;">
-            This app brings it all together: a clean profile, a photo feed you can share with friends,
-            an achievements tracker, and a simple chat. My goal is to help students build a digital
-            identity they're proud of one that's ready for scholarships, internships, and job
-            applications. ('-' )
+            across different platforms. This app brings them all together.
           </p>
         </div>
-
         <br>
-
         <div class="card notice" style="background:var(--border); border:none;">
           <h3 style="margin-bottom:10px; text-align:center;"><i class="fas fa-user" style="color:var(--primary);"></i> Creator</h3>
           <div class="team">
             <div class="member">
               <a href="https://www.facebook.com/archie.jhon.gregorio" target="_blank">
-                <div class="person-logo">
-                  <i class="fas fa-user-tie"></i>
-                </div>
+                <div class="person-logo"><i class="fas fa-user-tie"></i></div>
               </a>
               <p>Archie Jhon Gregorio</p>
               <small class="muted">Creator &amp; Developer</small>
             </div>
           </div>
         </div>
-
-        <br>
-
-        <div class="card notice" style="background:var(--border); border:none;">
-          <h3 style="margin-bottom:8px;"><i class="fas fa-rocket" style="color:var(--primary);"></i> Tech Stack</h3>
-          <div class="chips">
-            <span class="chip"><i class="fas fa-code"></i> HTML &amp; CSS</span>
-            <span class="chip"><i class="fab fa-js"></i> JavaScript</span>
-            <span class="chip"><i class="fab fa-node-js"></i> Node.js</span>
-            <span class="chip"><i class="fas fa-server"></i> Express</span>
-            <span class="chip"><i class="fas fa-database"></i> MongoDB</span>
-            <span class="chip"><i class="fas fa-key"></i> JWT + bcrypt</span>
-          </div>
-        </div>
       </div>
     </div>
   </div>
 
-  <!-- Session expiry warning -->
+  <!-- Session warning -->
   <div class="modal-backdrop" id="sessionWarnBackdrop">
     <div class="modal" style="max-width:420px;">
-      <div class="modal-head">
-        <h3><i class="fas fa-clock"></i> Session Expiring</h3>
-      </div>
+      <div class="modal-head"><h3><i class="fas fa-clock"></i> Session Expiring</h3></div>
       <div class="modal-body" style="text-align:center;">
         <p style="margin-bottom:16px;">Your session will expire soon. Stay logged in?</p>
         <div class="button-row-center">
