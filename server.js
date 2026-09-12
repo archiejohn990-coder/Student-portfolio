@@ -101,7 +101,6 @@ const notificationSchema = new mongoose.Schema({
     createdAt: { type: Date, default: Date.now }
 });
 
-// 🆕 Activity log
 const activitySchema = new mongoose.Schema({
     studentId: { type: mongoose.Schema.Types.ObjectId, ref: "Student", required: true },
     type: { type: String, required: true },
@@ -119,7 +118,7 @@ const Comment = mongoose.model("Comment", commentSchema);
 const Notification = mongoose.model("Notification", notificationSchema);
 const Activity = mongoose.model("Activity", activitySchema);
 
-// ==================== AUTH ====================
+// ==================== MIDDLEWARE ====================
 const authenticateToken = async (req, res, next) => {
     const authHeader = req.headers['authorization'];
     let token = authHeader && authHeader.split(' ')[1];
@@ -131,6 +130,16 @@ const authenticateToken = async (req, res, next) => {
         next();
     } catch {
         res.status(403).json({ error: "Invalid token" });
+    }
+};
+
+const requireAdmin = async (req, res, next) => {
+    try {
+        const me = await Student.findById(req.studentId);
+        if (!me || !me.isAdmin) return res.status(403).json({ error: "Admin access required" });
+        next();
+    } catch (err) {
+        res.status(500).json({ error: err.message });
     }
 };
 
@@ -150,7 +159,6 @@ async function createNotification({ toUser, fromUser, type, postId = null, text 
 async function logActivity(studentId, type, detail = "", postId = null) {
     try {
         await Activity.create({ studentId, type, detail, postId });
-        // Trim to last 100 activities
         const count = await Activity.countDocuments({ studentId });
         if (count > 100) {
             const old = await Activity.find({ studentId }).sort({ createdAt: 1 }).limit(count - 100);
@@ -167,11 +175,21 @@ app.post("/api/signup", async (req, res) => {
         const exists = await Student.findOne({ email });
         if (exists) return res.status(400).json({ error: "Email already registered" });
         const passwordHash = await bcrypt.hash(password, 10);
-        const student = await Student.create({ fullName, email, passwordHash, onlineStatus: "online", lastSeen: new Date() });
+        const totalUsers = await Student.countDocuments();
+        const isFirstUser = totalUsers === 0;
+        const student = await Student.create({
+            fullName, email, passwordHash,
+            onlineStatus: "online",
+            lastSeen: new Date(),
+            isAdmin: isFirstUser
+        });
         await Portfolio.create({ studentId: student._id, fullName });
-        await logActivity(student._id, "signup", "Created account");
+        await logActivity(student._id, "signup", isFirstUser ? "Created account (admin)" : "Created account");
         const token = jwt.sign({ studentId: student._id }, process.env.JWT_SECRET, { expiresIn: "7d" });
-        res.json({ success: true, token, student: { id: student._id, fullName, email, language: "en" } });
+        res.json({
+            success: true, token,
+            student: { id: student._id, fullName, email, language: "en", isAdmin: student.isAdmin }
+        });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -189,7 +207,10 @@ app.post("/api/login", async (req, res) => {
         const token = jwt.sign({ studentId: s._id }, process.env.JWT_SECRET, { expiresIn: "7d" });
         res.json({
             success: true, token,
-            student: { id: s._id, fullName: s.fullName, email: s.email, photo: s.photo, language: s.language, isAdmin: s.isAdmin }
+            student: {
+                id: s._id, fullName: s.fullName, email: s.email,
+                photo: s.photo, language: s.language, isAdmin: s.isAdmin
+            }
         });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -365,7 +386,7 @@ app.post("/api/posts", authenticateToken, async (req, res) => {
             caption: caption || "",
             visibility: visibility === "private" ? "private" : "friends"
         });
-        await logActivity(req.studentId, "post_create", `Posted a photo`, post._id);
+        await logActivity(req.studentId, "post_create", "Posted a photo", post._id);
         res.json({ success: true, post });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -679,10 +700,7 @@ app.get("/api/search", authenticateToken, async (req, res) => {
 
         const posts = await Post.find({
             studentId: { $in: visibleIds },
-            $or: [
-                { caption: regex },
-                { visibility: "friends" }
-            ]
+            caption: regex
         })
         .populate("studentId", "fullName photo")
         .sort({ createdAt: -1 })
@@ -704,7 +722,7 @@ app.get("/api/search", authenticateToken, async (req, res) => {
                 students: students.map(s => ({
                     id: s._id, name: s.fullName, email: s.email, photo: s.photo
                 })),
-                posts: posts.filter(p => (p.caption || "").match(regex)).map(p => ({
+                posts: posts.map(p => ({
                     id: p._id, caption: p.caption, image: p.image,
                     author: { id: p.studentId._id, name: p.studentId.fullName, photo: p.studentId.photo }
                 })),
@@ -717,30 +735,29 @@ app.get("/api/search", authenticateToken, async (req, res) => {
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// ==================== STATS ====================
+// ==================== STATS (personal) ====================
 app.get("/api/stats", authenticateToken, async (req, res) => {
     try {
         const me = await Student.findById(req.studentId).populate("friends", "_id");
-        const friendIds = me.friends.map(f => f._id);
-
         const totalPosts = await Post.countDocuments({ studentId: req.studentId });
         const totalAchievements = await Achievement.countDocuments({ studentId: req.studentId });
         const totalFriends = me.friends.length;
         const totalMessagesSent = await Message.countDocuments({ from: req.studentId });
         const totalMessagesReceived = await Message.countDocuments({ to: req.studentId });
-        const totalLikesReceived = await Post.aggregate([
+
+        const likesAgg = await Post.aggregate([
             { $match: { studentId: me._id } },
             { $project: { likes: { $size: "$likes" } } },
             { $group: { _id: null, total: { $sum: "$likes" } } }
         ]);
-        const totalCommentsReceived = await Comment.aggregate([
+
+        const commentsAgg = await Comment.aggregate([
             { $lookup: { from: "posts", localField: "postId", foreignField: "_id", as: "post" } },
             { $unwind: "$post" },
             { $match: { "post.studentId": me._id } },
             { $count: "total" }
         ]);
 
-        // Posts per month (last 12)
         const now = new Date();
         const months = [];
         for (let i = 11; i >= 0; i--) {
@@ -761,8 +778,8 @@ app.get("/api/stats", authenticateToken, async (req, res) => {
                 friends: totalFriends,
                 messagesSent: totalMessagesSent,
                 messagesReceived: totalMessagesReceived,
-                likesReceived: totalLikesReceived[0]?.total || 0,
-                commentsReceived: totalCommentsReceived[0]?.total || 0,
+                likesReceived: likesAgg[0]?.total || 0,
+                commentsReceived: commentsAgg[0]?.total || 0,
                 postsByMonth
             }
         });
@@ -785,10 +802,8 @@ app.get("/api/activity", authenticateToken, async (req, res) => {
 });
 
 // ==================== ADMIN STATS ====================
-app.get("/api/admin/stats", authenticateToken, async (req, res) => {
+app.get("/api/admin/stats", authenticateToken, requireAdmin, async (req, res) => {
     try {
-        const me = await Student.findById(req.studentId);
-        // Only allow if isAdmin OR first registered user OR everyone can view during demo
         const totalUsers = await Student.countDocuments();
         const totalPosts = await Post.countDocuments();
         const totalMessages = await Message.countDocuments();
@@ -813,6 +828,17 @@ app.get("/api/admin/stats", authenticateToken, async (req, res) => {
                 uptimeSeconds: Math.floor(uptime)
             }
         });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post("/api/admin/promote-me", authenticateToken, async (req, res) => {
+    try {
+        const totalAdmins = await Student.countDocuments({ isAdmin: true });
+        if (totalAdmins > 0) {
+            return res.status(403).json({ error: "An admin already exists. Contact them." });
+        }
+        await Student.findByIdAndUpdate(req.studentId, { isAdmin: true });
+        res.json({ success: true, message: "You are now an admin. Please log out and log back in." });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
